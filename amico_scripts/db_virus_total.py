@@ -22,7 +22,9 @@ import logging.config
 
 import util
 import vt_api
-from config import trusted_av_vendors, LOG_CONF_FILE
+from config import trusted_av_vendors
+
+LOG_CONF_FILE = "logging.conf"
 
 
 def insert_report():

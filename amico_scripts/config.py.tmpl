@@ -22,40 +22,13 @@ db_password = ""
 # Get your VT API key at: https://www.virustotal.com/en/
 vt_keys = []
 
-# When running AMICO under a SOCKS proxy, use these.
-# Else, have socks_proxy_host as "None"
-#socks_proxy_host = "localhost"
-socks_proxy_host = None
-socks_proxy_port = 12345
+# "live", "manual" or None
+vt_submissions = "live"
 
 trusted_av_vendors = ["Avast", "AVG", "F-Secure", "Kaspersky", "McAfee",
                     "Microsoft", "Sophos", "Symantec", "TrendMicro"]
 
-# The threshold value for classification between (0,1)
-# used in db_syslog.py script
-amico_threshold = 0.4
-
-# The name of the training model file to be used for
-# classification. Use the trainer.py script to create 
-# a new model specific to your network
-model_file = "models/default.model"
-
-
-LOG_CONF_FILE = "logging.conf"
-
-
-# Example: training_start_date = "2014-01-01"  
-# If left as None, all the download events from the beginning are 
-# used for training the classifier
-training_start_date = None
-# If left as None, all the download events till the end are used
-# for training the classifier
-# training_days = 60
-training_days = None
-
-# "live", "manual" or None
-vt_submissions = "live"
-
+# Manual downloads are only enabled if vt_submissions = "manual"
 # Every time a download is detected using the URL from which the executable has
 # been downloaded, a new HTTP request is created and the file is refetched from
 # the same webserver. We refer to this as a manual download. Please specify the
@@ -68,3 +41,19 @@ MAN_DOWNLOAD_DIR = "manual_downloads"
 # machine on which AMICO is running) in the script
 # "start_pe_dump.sh" in "pe_dump" directory
 man_download_client_ips = [""]
+
+# When running AMICO under a SOCKS proxy, use these.
+# Else, have socks_proxy_host as "None"
+#socks_proxy_host = "localhost"
+socks_proxy_host = None
+socks_proxy_port = 12345
+
+
+# The threshold value for classification between (0,1)
+# used in db_syslog.py script
+amico_threshold = 0.4
+
+# The name of the training model file to be used for
+# classification. Use the trainer.py script to create 
+# a new model specific to your network
+model_file = "models/default.model"

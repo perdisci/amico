@@ -24,6 +24,7 @@ from config import *
 import vt_api
 import util
 
+LOG_CONF_FILE = "logging.conf"
 
 class VTSubmissions:
     def __init__(self):
