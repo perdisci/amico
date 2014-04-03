@@ -21,7 +21,7 @@ from struct import unpack
 import urllib2
 
 import util
-from config import MAN_DOWNLOAD_DIR, man_download_client_ips
+from config import MAN_DOWNLOAD_DIR
 
 # checks for valid PE header
 def is_pe_file(bin_data):
@@ -109,11 +109,6 @@ referer = row[3]
 client = row[4]
 server = row[5]
 
-# If client is a host performing Manual Downloads then exit to prevent
-# infinite looping
-if client in man_download_client_ips:
-    print "The client:{0} is in man_download_client_ips list,exiting".format(client)
-    sys.exit()
 if host is None:
     host = server
 ordered_host = util.reorder_domain(host)
