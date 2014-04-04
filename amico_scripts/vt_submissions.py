@@ -269,7 +269,7 @@ def sleep_for_the_day():
         time.sleep(15 * 60)
 
 
-def main():
+def vt_submissions():
     vt_submit = VTSubmissions()
     vt_submit.get_hashes_from_db()
     while True:
@@ -295,4 +295,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    vt_submissions()

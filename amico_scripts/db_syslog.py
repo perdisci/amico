@@ -20,6 +20,9 @@ import time
 import util
 from util import reorder_domain
 
+# Wait for db_virus_total to complete
+WAIT_TIME = 60
+
 
 def make_syslog_entry(cursor, dump_id):
     # Database query to get the relevant record
@@ -59,18 +62,15 @@ def make_syslog_entry(cursor, dump_id):
         syslog.syslog(syslog.LOG_WARNING | syslog.LOG_USER, entry)
 
 
-def main():
-    # Wait for db_virus_total to complete
-    WAIT_TIME = 60
+def db_syslog(dump_id):
     time.sleep(WAIT_TIME)
-
     conn = util.connect_to_db()
     cursor = conn.cursor()
-    dump_id = sys.argv[1]
     make_syslog_entry(cursor, dump_id)
     cursor.close()
     conn.close()
 
 
 if __name__ == "__main__":
-    main()
+    dump_id = sys.argv[1]
+    db_syslog(dump_id)

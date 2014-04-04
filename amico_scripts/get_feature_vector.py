@@ -1035,15 +1035,15 @@ def insert_features(cursor, dump_id):
         print "Exception in inserting url_struct features for %s dump_id" % (dump_id,)
         print e
 
-def main():
+
+def get_feature_vector(dump_id):
     conn = util.connect_to_db()
     cursor = conn.cursor()
-    if len(sys.argv) == 2:
-        dump_id = sys.argv[1]
-        insert_features(cursor, dump_id)
-        print "Done inserting features for dump_id: ", dump_id
-    else:
-        print "Incorrect number of arguments!!"
+    insert_features(cursor, dump_id)
+    print "Done inserting features for dump_id: ", dump_id
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) == 2:
+        get_feature_vector(sys.argv[1])
+    else:
+        print "Incorrect number of arguments!!"

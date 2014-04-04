@@ -57,8 +57,7 @@ def usage():
     sys.exit(1)
 
 
-def main():
-    flow_file = sys.argv[1]
+def main(flow_file):
     f = open(flow_file, 'rb')
     data = f.read()
     f.close()
@@ -76,4 +75,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    main(sys.argv[1])

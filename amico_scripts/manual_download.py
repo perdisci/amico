@@ -23,9 +23,11 @@ import urllib2
 import util
 from config import MAN_DOWNLOAD_DIR
 
+USER_AGENT = "Mozilla/5.0 (Windows; U; MSIE 7.0; Windows NT 6.0; en-US)"
+HTTP_TIMEOUT = 40  # HTTP Request timeout
+
 # checks for valid PE header
 def is_pe_file(bin_data):
-
     if not bin_data:
         return False
 
@@ -48,7 +50,7 @@ def is_pe_file(bin_data):
 # Take the request, download the file and generate sha1 and md5 hashes
 # When the file is a valid pe and different from previous, then, save
 # it to the downloads directory
-def download_file(req, captured_sha1):
+def download_file(dump_id, req, captured_sha1):
     # Make the request
     try:
         res = urllib2.urlopen(req, timeout=HTTP_TIMEOUT).read()
@@ -89,45 +91,45 @@ def download_file(req, captured_sha1):
     return sha1, md5, different, is_pe
 
 
-USER_AGENT = "Mozilla/5.0 (Windows; U; MSIE 7.0; Windows NT 6.0; en-US)"
-HTTP_TIMEOUT = 40  # HTTP Request timeout
+def manual_download(captured_sha1):
+    util.setup_socks()
+    conn = util.connect_to_db()
+    cursor = conn.cursor()
 
-util.setup_socks()
-conn = util.connect_to_db()
-cursor = conn.cursor()
+    # Database query to get the relevant recent record
+    cursor.execute("""
+        SELECT dump_id,host,url,referer,client,server FROM pe_dumps WHERE sha1 = %s
+            ORDER BY timestamp DESC;""", (captured_sha1,))
+    row = cursor.fetchone()
+    dump_id = row[0]
+    host = row[1]
+    url = row[2]
+    referer = row[3]
+    client = row[4]
+    server = row[5]
 
-captured_sha1 = sys.argv[1]
-# Database query to get the relevant recent record
-cursor.execute("""
-    SELECT dump_id,host,url,referer,client,server FROM pe_dumps WHERE sha1 = %s
-        ORDER BY timestamp DESC;""", (captured_sha1,))
-row = cursor.fetchone()
-dump_id = row[0]
-host = row[1]
-url = row[2]
-referer = row[3]
-client = row[4]
-server = row[5]
+    if host is None:
+        host = server
+    ordered_host = util.reorder_domain(host)
+    full_url = "http://" + ordered_host + url
+    #print full_url
 
-if host is None:
-    host = server
-ordered_host = util.reorder_domain(host)
-full_url = "http://" + ordered_host + url
-#print full_url
+    # Prepare the urllib2 request
+    req = urllib2.Request(full_url)
+    req.add_header("User-Agent", USER_AGENT)
 
-# Prepare the urllib2 request
-req = urllib2.Request(full_url)
-req.add_header("User-Agent", USER_AGENT)
+    download_time = time.time()
+    sha1, md5, different, is_pe = download_file(dump_id, req, captured_sha1)
 
-download_time = time.time()
-sha1, md5, different, is_pe = download_file(req, captured_sha1)
+    # Database statement
+    cursor.execute("""
+        INSERT INTO manual_download_checksums(dump_id, sha1,
+        md5, different, referer_exists, timestamp, is_pe)
+        VALUES (%s, %s, %s, %s, %s, TO_TIMESTAMP(%s), %s)""",
+        (dump_id, sha1, md5, different, False, download_time, is_pe))
 
-# Database statement
-cursor.execute("""
-    INSERT INTO manual_download_checksums(dump_id, sha1,
-    md5, different, referer_exists, timestamp, is_pe)
-    VALUES (%s, %s, %s, %s, %s, TO_TIMESTAMP(%s), %s)""",
-    (dump_id, sha1, md5, different, False, download_time, is_pe))
+    cursor.close()
+    conn.close()
 
-cursor.close()
-conn.close()
+if __name__ == "__main__":
+    manual_download(sys.argv[1])
