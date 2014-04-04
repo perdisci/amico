@@ -66,14 +66,10 @@ def download_file(dump_id, req, captured_sha1):
         print "Executable could not be downloaded manually"
     else:
         if is_pe_file(res):
-            sha1_obj = hashlib.sha1()
-            sha1_obj.update(res)
-            sha1 = sha1_obj.hexdigest()
+            sha1 = hashlib.sha1(res).hexdigest()
 
             # Store the downloaded file in a sub directory as md5.exe
-            md5_obj = hashlib.md5()
-            md5_obj.update(res)
-            md5 = md5_obj.hexdigest()
+            md5 = hashlib.md5(res).hexdigest()
 
             download_file = open(MAN_DOWNLOAD_DIR + "/" + md5 + ".exe", "w")
             download_file.write(res)

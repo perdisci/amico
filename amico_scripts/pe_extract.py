@@ -57,7 +57,9 @@ def usage():
     sys.exit(1)
 
 
-def main(flow_file):
+def pe_extract(flow_file, dst=None):
+    if not dst:
+        dst = flow_file + '.exe'
     f = open(flow_file, 'rb')
     data = f.read()
     f.close()
@@ -66,13 +68,12 @@ def main(flow_file):
 
     if is_pe_file(data):
         print "Writing file:", flow_file+'.exe'
-        f = open(flow_file+'.exe', 'wb')
+        f = open(dst, 'wb')
         f.write(data)
         f.close()
 
     print "Finished!"
 
 
-
 if __name__ == '__main__':
-    main(sys.argv[1])
+    pe_extract(sys.argv[1])
