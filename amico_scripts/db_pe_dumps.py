@@ -121,7 +121,7 @@ def db_pe_dumps(file_name, sha1, md5, file_size):
     fileHandle.close()
     cursor.close()
     conn.close()
-    return dump_id
+    return dump_id, corrupt_pe
 
 
 if __name__ == "__main__":

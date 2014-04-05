@@ -1,5 +1,6 @@
 import httplib, mimetypes
 
+
 def post_multipart(host, selector, fields, files):
     """
     Post fields and files to an http host as multipart/form-data.
@@ -8,14 +9,14 @@ def post_multipart(host, selector, fields, files):
     Return the server's response page.
     """
     content_type, body = encode_multipart_formdata(fields, files)
-    h = httplib.HTTPS(host)
+    h = httplib.HTTPSConnection(host, timeout=120)
     h.putrequest('POST', selector)
     h.putheader('content-type', content_type)
     h.putheader('content-length', str(len(body)))
     h.endheaders()
     h.send(body)
-    errcode, errmsg, headers = h.getreply()
-    return h.file.read()
+    return h.getresponse().read()
+
 
 def encode_multipart_formdata(fields, files):
     """
@@ -42,6 +43,7 @@ def encode_multipart_formdata(fields, files):
     body = CRLF.join(L)
     content_type = 'multipart/form-data; boundary=%s' % BOUNDARY
     return content_type, body
+
 
 def get_content_type(filename):
     return mimetypes.guess_type(filename)[0] or 'application/octet-stream'

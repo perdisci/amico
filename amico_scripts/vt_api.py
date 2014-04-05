@@ -6,6 +6,8 @@ import postfile
 import config
 from config import *
 
+TIMEOUT = 10
+
 
 def get_vt_key():
     #random.seed()
@@ -43,7 +45,7 @@ def rescan_request(arg):
     data = urllib.urlencode(parameters)
     req = urllib2.Request(url, data)
     try:
-        response = urllib2.urlopen(req)
+        response = urllib2.urlopen(req, timeout=5*TIMEOUT)
     except Exception as e:
         print "rescan_request: Exception occured", e
         return
@@ -59,7 +61,7 @@ def get_vt_report(scan_id):
     data = urllib.urlencode(parameters)
     req = urllib2.Request(url, data)
     try:
-        response = urllib2.urlopen(req)
+        response = urllib2.urlopen(req, timeout=TIMEOUT)
     except Exception as e:
         print "get_vt_report: Exception occured", e
         return
@@ -74,7 +76,7 @@ def get_ip_report(ip):
     data = urllib.urlencode(parameters)
     req = urllib2.Request("%s?%s" % (url, data))
     try:
-        response = urllib2.urlopen(req)
+        response = urllib2.urlopen(req, timeout=TIMEOUT)
     except Exception as e:
         print "get_vt_report: Exception occured", e
         return

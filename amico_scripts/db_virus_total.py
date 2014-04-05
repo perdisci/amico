@@ -28,7 +28,7 @@ LOG_CONF_FILE = "logging.conf"
 # Do not make a new query for the same sha1 if the previous query was made
 # with in VT_QUERY_INTERVAL (in days)
 VT_QUERY_INTERVAL = 1
-MAX_TRIES = 5
+MAX_TRIES = 3
 
 
 def insert_report(cursor, report, sha1, md5, json, dump_id):
@@ -128,7 +128,7 @@ def db_virus_total(dump_id):
             else:
                 logger.exception("Unknown response code! %s" %
                         (report["response_code"],))
-                time.sleep(5)
+                time.sleep(1)
 
         except Exception as e:
             print e
