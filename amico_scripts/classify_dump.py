@@ -33,7 +33,7 @@ def print_arff(dump_id):
         (dump_id, ))
     if cursor.rowcount == 0:
         print "Feature vector not found. Exiting..."
-        sys.exit()
+        return
     res = cursor.fetchone()
     res = res._asdict()
     del res['raw_dump_num_av_labels']

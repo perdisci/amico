@@ -96,7 +96,7 @@ def db_virus_total(dump_id):
                 VALUES (%s, %s)""",
                 (dump_id, vt_id))
         conn.close()
-        sys.exit()
+        return
 
     tries = 0
     success = False

@@ -377,7 +377,7 @@ def insert_server_ip_based_features(cursor, dump_id):
             pe.dump_id < %s """,
         (server_ip, dump_id))
     server_ip_total_downloads = cursor.fetchone()[0]
-    print "server_ip_total_downloads:", server_ip_total_downloads
+    #print "server_ip_total_downloads:", server_ip_total_downloads
 
     # Disabled vt_month_shelf due to the 403 error from VT
     #cursor.execute("""
@@ -1037,6 +1037,7 @@ def insert_features(cursor, dump_id):
 
 
 def get_feature_vector(dump_id):
+    #print "entered get_feature_vector"
     conn = util.connect_to_db()
     cursor = conn.cursor()
     insert_features(cursor, dump_id)

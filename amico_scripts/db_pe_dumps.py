@@ -18,13 +18,13 @@ from config import *
 
 import util
 
-def db_pe_dumps(file_name, sha1, md5, file_size):
+def db_pe_dumps(file_path, sha1, md5, file_size):
     #print "Time b4 http parsing: %f" %(time.time(),)
     # Use Autocommit mode for database connection
     conn = util.connect_to_db()
     cursor = conn.cursor()
 
-    fileHandle = open(file_name)
+    fileHandle = open(file_path)
 
     # Timestamp
     r = re.compile('[0-9]+')
@@ -125,8 +125,8 @@ def db_pe_dumps(file_name, sha1, md5, file_size):
 
 
 if __name__ == "__main__":
-    file_name = sys.argv[1]
+    file_path = sys.argv[1]
     sha1 = sys.argv[2]
     md5 = sys.argv[3]
     file_size = sys.argv[4]
-    db_pe_dumps(file_name, sha1, md5, file_size)
+    db_pe_dumps(file_path, sha1, md5, file_size)
