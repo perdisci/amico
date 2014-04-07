@@ -68,7 +68,7 @@ def process_file(raw_path, file_name):
             args=(db_virus_total, (dump_id,), VT_TIMEOUT)).start()
     if vts_config == "manual":
         Process(target=process_timeout,
-            args=(manual_download, (dump_id,), MD_TIMEOUT)).start()
+            args=(manual_download, (sha1,), MD_TIMEOUT)).start()
     ip2asn(dump_id)
     get_feature_vector(dump_id)
     classify_dump(dump_id)

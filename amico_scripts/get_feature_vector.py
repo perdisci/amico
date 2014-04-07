@@ -17,7 +17,6 @@ import urlparse
 import re
 import psycopg2
 import util
-import argparse
 import sys
 
 # TO DO: Modify this to count the VT entry at the correct time, use features table raw_ values --DONE--
