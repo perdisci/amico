@@ -27,7 +27,7 @@ USER_AGENT = "Mozilla/5.0 (Windows; U; MSIE 7.0; Windows NT 6.0; en-US)"
 CYMRU_TIMEOUT = 1  # Timeout for cymru dig call
 
 
-def ip2asn(sha1):
+def ip2asn(dump_id):
     # Connect to database
     try:
         conn = psycopg2.connect("dbname=%s host=%s user=%s password=%s"
@@ -48,17 +48,16 @@ def ip2asn(sha1):
 
     # Database query to get the relevant recent record
     cursor.execute("""
-        SELECT server, timestamp FROM pe_dumps WHERE sha1 = %s
-            ORDER BY timestamp DESC;""", (sha1,))
+        SELECT server, timestamp FROM pe_dumps WHERE dump_id = %s
+            """, (dump_id,))
     row = cursor.fetchone()
     server_ip = row[0]
-
     # Exit if an AS containing this IP has been logged with in the last 1 month
     cursor.execute("""
         SELECT * FROM bgp2asn WHERE log_date > (current_date - interval '1 month')
         AND bgp_prefix >> %s """, (server_ip,))
     if cursor.rowcount > 0:
-        sys.exit()
+        return
 
     # Query whois.cymru.com
     #cmd = subprocess.Popen(['whois','-h','whois.cymru.com','-v',
@@ -75,12 +74,13 @@ def ip2asn(sha1):
     # Query asn.cymru.com using dig
     # A sample output is:
     #     "701 1239 3549 3561 7132 | 216.90.108.0/24 | US | arin | 1998-09-25"
+    print "making call"
     cmd = subprocess.Popen(['dig', '+short', util.reverse_ip(server_ip) +
                     '.origin.asn.cymru.com', 'TXT'], stdout=subprocess.PIPE)
     time.sleep(CYMRU_TIMEOUT)
     if cmd.poll() is None:
         cmd.kill()
-        sys.exit()
+        return
     as_info = cmd.stdout.readline()
     as_info = as_info.strip().strip('"')
     output = as_info.split('|')
@@ -106,7 +106,7 @@ def ip2asn(sha1):
         cmd.kill()
         print ("ip2asn.py: Couldn't finish the call to cymru for {0}. Aborting..."
                 .format((server_ip,)))
-        sys.exit()
+        return
     as_info = cmd.stdout.readline()
     as_info = as_info.strip().strip('"')
     output = as_info.split('|')
