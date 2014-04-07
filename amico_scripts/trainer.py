@@ -4,7 +4,7 @@ import psycopg2.extensions
 import subprocess
 import sys
 
-from config import training_days, training_start_date
+from train_config import training_days, training_start_date
 from features import features
 import util
 
