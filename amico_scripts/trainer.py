@@ -3,6 +3,7 @@ import psycopg2.extras
 import psycopg2.extensions
 import subprocess
 import sys
+import os
 
 from train_config import training_days, training_start_date
 from features import features
@@ -37,17 +38,19 @@ class Trainer:
         print "Training end date:", self.training_end_date
 
     def train(self,):
-        model_output_file = "models/%s.model" % (
-                datetime.today().strftime("%b%d_%y_%H%M%S"),)
+        model_name = datetime.today().strftime("%b%d_%y_%H%M%S")
+        model_output_file = "models/%s.model" % (model_name,)
         self.benign_dumps = self.get_benign_dumps()
         self.malicious_dumps = self.get_malicious_dumps()
         print "# benign dumps", len(self.benign_dumps)
         print "# malware dumps", len(self.malicious_dumps)
         self.print_arff()
         subprocess.call("""
-            java -Xmx2000m -cp ./weka.jar weka.classifiers.meta.FilteredClassifier -t train.arff -d %s -p 1,58,59 -distribution -F "weka.filters.unsupervised.attribute.RemoveType -T string" -W weka.classifiers.trees.RandomForest -- -K 0 -S 1 -I 50 > /dev/null
-            """ % (model_output_file,), shell=True)
-        print "New model trained: %s" % (model_output_file,)
+            java -Xmx2000m -cp ./weka.jar weka.classifiers.meta.FilteredClassifier -t train.arff -d %s -p 1,58,59 -distribution -F "weka.filters.unsupervised.attribute.RemoveType -T string" -W weka.classifiers.trees.RandomForest -- -K 0 -S 1 -I 50 > logs/training/%s.log
+            """ % (model_output_file, model_name), shell=True)
+        print "New model trained: %s, Log file: logs/training/%s.log" % (
+                    model_output_file, model_name)
+        os.remove("train.arff")
 
     def get_arff_line(self, dump_id, is_benign):
         self.cursor = self.conn.cursor(

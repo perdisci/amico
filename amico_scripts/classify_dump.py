@@ -100,7 +100,7 @@ def classify_dump(dump_id):
     cursor.execute("INSERT INTO amico_scores VALUES "
                    "(%s, %s)", (dump_id, score))
 
-    #subprocess.call("rm test.arff", shell=True)
+    subprocess.call("rm test.arff", shell=True)
     subprocess.call("rm test.result", shell=True)
 
 if __name__ == "__main__":
