@@ -34,8 +34,14 @@ class Trainer:
         if training_days:
             self.training_end_date = (self.training_start_date +
                     timedelta(days=training_days))
-        print "Training start date:", self.training_start_date
-        print "Training end date:", self.training_end_date
+        print "Training start date:", self.training_start_date.strftime("%B %d, %Y")
+        print "Training end date:", self.training_end_date.strftime("%B %d, %Y")
+
+    def count(self,):
+        self.benign_dumps = self.get_benign_dumps()
+        self.malicious_dumps = self.get_malicious_dumps()
+        print "# benign dumps", len(self.benign_dumps)
+        print "# malware dumps", len(self.malicious_dumps)
 
     def train(self,):
         model_name = datetime.today().strftime("%b%d_%y_%H%M%S")
@@ -48,8 +54,8 @@ class Trainer:
         subprocess.call("""
             java -Xmx2000m -cp ./weka.jar weka.classifiers.meta.FilteredClassifier -t train.arff -d %s -p 1,58,59 -distribution -F "weka.filters.unsupervised.attribute.RemoveType -T string" -W weka.classifiers.trees.RandomForest -- -K 0 -S 1 -I 50 > logs/training/%s.log
             """ % (model_output_file, model_name), shell=True)
-        print "New model trained: %s, Log file: logs/training/%s.log" % (
-                    model_output_file, model_name)
+        print "New model trained: %s" % (model_output_file,)
+        print "Log file: logs/training/%s.log" % (model_name,)
         os.remove("train.arff")
 
     def get_arff_line(self, dump_id, is_benign):
@@ -184,4 +190,7 @@ class Trainer:
 
 if __name__ == "__main__":
     trainer = Trainer()
-    trainer.train()
+    if len(sys.argv) > 1 and sys.argv[1] == "-c":
+        trainer.count()
+    else:
+        trainer.train()
