@@ -1,0 +1,23 @@
+# The IP from which the manual downloads are happening should be listed here to
+# prevent infinite download loops. 
+manual_download_ip = ""
+
+# The subnets hosting popular benign websites like Facebook, Google, MSN are
+# listed here and is fed to a BPF filter. This reduces the traffic load on
+# PE_DUMP
+whitelist_subnets = [ 
+            "69.171.224.0/20",
+            "66.220.152.0/21",
+            "74.125.0.0/16",
+            "220.181.111.0/24",
+            "123.125.114.0/24",
+            "199.59.148.0/22",
+            "65.54.94.0/23",
+            "65.55.160.0/19",
+            "65.55.192.0/18",
+            "66.135.192.0/19",
+            "157.166.224.0/20",
+            "15.192.0.0/16",
+            "143.166.0.0/17",
+            "17.148.0.0/14",
+            "192.150.16.0/23"]
