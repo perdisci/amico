@@ -23,6 +23,8 @@ db_password = ""
 vt_keys = []
 
 # "live", "manual" or None
+# If vt_submission = "manual", fill the manual_download_ip variable in
+# pe_dump/config.py
 vt_submissions = "live"
 
 trusted_av_vendors = ["Avast", "AVG", "F-Secure", "Kaspersky", "McAfee",
@@ -34,13 +36,6 @@ trusted_av_vendors = ["Avast", "AVG", "F-Secure", "Kaspersky", "McAfee",
 # the same webserver. We refer to this as a manual download. Please specify the
 # directory where these manual downloads should be saved
 MAN_DOWNLOAD_DIR = "manual_downloads"
-
-# The IP from which the manual downloads are happening should be listed here to
-# prevent infinite loops. 
-# Instead, leave this empty and fill the manual download IP (i.e. the IP of the
-# machine on which AMICO is running) in the script
-# "start_pe_dump.sh" in "pe_dump" directory
-man_download_client_ips = [""]
 
 # When running AMICO under a SOCKS proxy, use these.
 # Else, have socks_proxy_host as "None"
