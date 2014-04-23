@@ -57,6 +57,8 @@ class VTSubmissions:
             hashes = self.get_hashes_from_db_live()
         else:
             hashes = self.get_hashes_from_db_scans()
+
+        self.logger.debug("get_hashes_from_db(): Yesterday's hahses: %s", len(hashes))
         self.hashes = self.update_hashes(hashes)
 
     def update_hashes(self, hashes):
@@ -82,7 +84,7 @@ class VTSubmissions:
             """, (self.today,))
         if self.cursor.rowcount > 0:
             hashes = hashes.difference(self.cursor.fetchall())
-        self.logger.debug("submit_hashes(): Number of hashes: %s", len(hashes))
+        self.logger.debug("update_hashes(): Number of hashes: %s", len(hashes))
         return hashes
 
     def get_hashes_from_db_scans(self):
@@ -269,7 +271,7 @@ def sleep_for_the_day():
         time.sleep(15 * 60)
 
 
-def vt_submissions():
+def vt_submissions_func():
     vt_submit = VTSubmissions()
     vt_submit.get_hashes_from_db()
     while True:
@@ -295,4 +297,4 @@ def vt_submissions():
 
 
 if __name__ == "__main__":
-    vt_submissions()
+    vt_submissions_func()

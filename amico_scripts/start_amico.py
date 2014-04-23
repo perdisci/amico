@@ -7,7 +7,7 @@ import time
 import traceback
 
 from config import whitelist_domains, vt_submissions as vts_config
-from vt_submissions import vt_submissions
+from vt_submit import vt_submissions_func
 from pe_extract import pe_extract
 from db_pe_dumps import db_pe_dumps
 from db_virus_total import db_virus_total
@@ -87,7 +87,7 @@ def process_file(raw_path, file_name):
 
 
 def start_amico():
-    Process(target=vt_submissions).start()
+    Process(target=vt_submissions_func).start()
     print "Started amico_scripts"
     while True:
         p = subprocess.Popen(
