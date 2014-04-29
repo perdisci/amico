@@ -4,7 +4,7 @@
 # pvadrevu@uga.edu                                                        #
 #                                                                         #
 # Distributed under the GNU Public License                                #
-# http://www.gnu.org/licenses/gpl.txt                                     #   
+# http://www.gnu.org/licenses/gpl.txt                                     #
 #                                                                         #
 # This program is free software; you can redistribute it and/or modify    #
 # it under the terms of the GNU General Public License as published by    #
@@ -48,8 +48,8 @@ try:
     cursor.execute("""
         CREATE TABLE pe_dumps( dump_id SERIAL,PRIMARY KEY(dump_id),
         sha1 VARCHAR(40),md5 VARCHAR(32),timestamp TIMESTAMP, server INET,
-        client INET,method VARCHAR(10),url VARCHAR(512),host VARCHAR(60),
-        referer VARCHAR(256),server_application VARCHAR(64),
+        client INET,method VARCHAR(10),url VARCHAR(512),host VARCHAR(256),
+        referer VARCHAR(512),server_application VARCHAR(64),
         content_type VARCHAR(128),dst_port INT,corrupt BOOLEAN,file_size INT)
         """)
 except psycopg2.DatabaseError as e:
