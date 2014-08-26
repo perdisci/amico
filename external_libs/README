@@ -1,0 +1,28 @@
+
+PF_RING installation
+
+See http://www.ntop.org/products/pf_ring/
+
+Here is what worked for us on Debian:
+
+1) Download and untar PF_RING
+
+2) Make sure you have these packages installed
+
+libpcap-dev
+bison
+flex
+byacc
+
+You will also have to install the kernel headers
+
+3) cd PF_RING /userland
+4) make
+
+5) cd libpcap
+6) make
+7) sudo make install
+
+To compile pe_dump with the new pf_ring-aware libpcap, use Makefile.pfring
+
+ 
