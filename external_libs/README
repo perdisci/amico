@@ -1,4 +1,3 @@
-
 PF_RING installation
 
 See http://www.ntop.org/products/pf_ring/
@@ -10,19 +9,44 @@ Here is what worked for us on Debian:
 2) Make sure you have these packages installed
 
 libpcap-dev
+libnuma-dev
 bison
 flex
 byacc
 
 You will also have to install the kernel headers
 
-3) cd PF_RING /userland
-4) make
+$ cd <PF_RING-DIR>/userland/lib
+$ ./configure
+$ make
+# make install
 
-5) cd libpcap
-6) make
-7) sudo make install
+$ cd ../libpcap
+$ ./configure
+$ make
+# make install
+# ldconfig /usr/local/lib/
 
 To compile pe_dump with the new pf_ring-aware libpcap, use Makefile.pfring
+
+You should see something like this:
+
+amico:~/amico/trunk/pe_dump$ make
+gcc    -c -o pe_dump.o pe_dump.c
+gcc    -c -o search.o search.c
+gcc    -c -o lru-cache.o lru-cache.c
+gcc    -c -o seq_list.o seq_list.c
+gcc   -o pe_dump pe_dump.o search.o lru-cache.o seq_list.o -L /usr/local/lib/ -lpcap -lpthread
+
+amico:~/amico/trunk/pe_dump$ ldd pe_dump
+        linux-vdso.so.1 =>  (0x00007fff7a52c000)
+        libpcap.so.1 => /usr/local/lib/libpcap.so.1 (0x00007f9f8f10c000)
+        libpthread.so.0 => /lib/x86_64-linux-gnu/libpthread.so.0 (0x00007f9f8eef0000)
+        libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007f9f8eb64000)
+        libnuma.so.1 => /usr/lib/libnuma.so.1 (0x00007f9f8e959000)
+        /lib64/ld-linux-x86-64.so.2 (0x00007f9f8f381000)
+
+
+
 
  
