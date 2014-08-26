@@ -37,9 +37,9 @@
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
 #define ETH_ADDR_LEN  6
-#define ETH_HEADER_LEN 14
-#define PCAP_SNAPLEN 1514
-// #define PCAP_SNAPLEN 1600 // increased to cover corener cases with eth.len > 1514
+#define ETH_HEADER_LEN 14 // lenght of the "standard" ethernet frame
+// #define PCAP_SNAPLEN 1514
+#define PCAP_SNAPLEN 1600 // increased to cover corener cases with eth.len > 1514 (e.g., in case of VLAN tags)
 // #define PCAP_SNAPLEN 65535 // increased to cover jumbo frames! this makes things very slow!
 #define MAX_RCV_PACKETS -1
 
@@ -360,7 +360,8 @@ int main(int argc, char **argv) {
 
     /* BPF filter */
     if(pcap_filter == NULL)
-        pcap_filter = "tcp"; // default filter
+        // pcap_filter = "tcp"; // default filter
+        pcap_filter = NULL; // default filter
     if(pcap_compile(pch, &pcf, pcap_filter, 0, net) == -1) {
         fprintf(stderr, "Couldn't parse filter %s: %s\n",pcap_filter, pcap_geterr(pch));
         exit(1);
@@ -376,23 +377,30 @@ int main(int argc, char **argv) {
     printf("Reading packets...\n\n");
 
     /* start listening */
+    pcap_filter = NULL;
     pcap_loop(pch, MAX_RCV_PACKETS, callback, NULL);
 
     printf("Done reading packets!\n\n");
-    sleep(3); // wait just to make sure threats are done...
+
+    // quick hack. this needs to be changed to really wait for all dump threads to finish...
+    sleep(3); // wait a few seconds just to make sure file dump threads are done...
 }
 
 void print_usage(char* cmd) {
     fprintf(stderr, "Usage: %s [-i nic] [-r pcap_file] -d dump_dir [-f \"pcap_filter\"] [-L lru_cache_size] [-K max_pe_file_size (KB)] [-D debug_level] [-A]\n",cmd);
 }
 
+
 void packet_received(char *args, const struct pcap_pkthdr *header, const u_char *packet) {
+
+
 
     if(header->len > PCAP_SNAPLEN) { // skip truncated packets
 
     #ifdef PE_DEBUG
     if(debug_level >= VERY_VERY_VERBOSE) {
 	printf("LEN > PCAP_SNAPLEN !!!");
+
         printf("header->len = %u\n", header->len);
         printf("PCAP_SNAPLEN = %u\n", PCAP_SNAPLEN);
         fflush(stdout);
@@ -401,6 +409,19 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
 
         return;
     }
+
+
+    struct eth_header *ep;
+    u_short eth_hdr_len = ETH_HEADER_LEN;
+    u_short eth_type = 0;
+
+    ep = (struct eth_header *)packet;
+    eth_type = ntohs(ep->eth_type);
+    // printf("Ethernet type = %x\n", eth_type);
+    if(eth_type == 0x8100) { // this is a VLAN tagged frame!
+        eth_hdr_len += 4; // 802.1Q Header len = 4 byes
+    }
+
 
     static u_int pkt_count = 0;
     char pkt_src[24], anon_pkt_src[24];
@@ -426,17 +447,18 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
     int payload_size;
 
     eth = (const struct eth_header*)packet;
-    ip  = (const struct ip_header*)(packet + ETH_HEADER_LEN);
+    ip  = (const struct ip_header*)(packet + eth_hdr_len);
     ip_hdr_size = IP_HEADER_LEN(ip)*4;
-    tcp = (const struct tcp_header*)(packet + ETH_HEADER_LEN + ip_hdr_size); 
+    tcp = (const struct tcp_header*)(packet + eth_hdr_len + ip_hdr_size); 
     tcp_hdr_size = TH_OFF(tcp)*4;
-    payload = (const char*)(packet + ETH_HEADER_LEN + ip_hdr_size + tcp_hdr_size);
+    payload = (const char*)(packet + eth_hdr_len + ip_hdr_size + tcp_hdr_size);
     payload_size = ntohs(ip->ip_len) - (ip_hdr_size + tcp_hdr_size);
 
     if(ip_hdr_size < 20 || tcp_hdr_size < 20) {
         #ifdef PE_DEBUG
         if(debug_level >= VERY_VERY_VERBOSE) {
-            printf("Invalid packet (headers are tool small)\n");
+            printf("Invalid packet (headers are too small)\n");
+            printf("ip_hdr_size = %d ; tcp_hdr_size = %d \n", ip_hdr_size, tcp_hdr_size);
             fflush(stdout);
         }
         #endif
