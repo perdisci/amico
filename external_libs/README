@@ -81,3 +81,28 @@ Then, load the driver and pf_ring
 The steps above have been adapted from 
 PF_RING-6.0.1/drivers/PF_RING_aware/intel/igb/igb-5.2.5-zc/src/load_driver.sh
 
+
+=== Some other possible optimizations ===
+
+Another thing I noticed is a possible problem with ksoftirqd "clogging" one single CPU
+
+If you are running multiple instances of pe_dump 
+(e.g., four instances, one per each of four 1Gbps NIC) 
+you might need to explicilty play with the CPU affinity.
+
+For example, you can have each NIC have affinity with a specific CPU core
+
+# echo 00 > /proc/irq/123/smp_affinity
+# echo 01 > /proc/irq/125/smp_affinity
+# echo 02 > /proc/irq/128/smp_affinity
+# echo 03 > /proc/irq/130/smp_affinity
+
+where you need to replace 123, 125, etc., with your NICs' IRQ numbers.
+
+You should also take a look at 
+PF_RING-6.0.1/drivers/PF_RING_aware/intel/igb/igb-5.2.5-zc/scripts/set_irq_affinity
+
+
+
+
+
