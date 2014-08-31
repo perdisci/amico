@@ -1,6 +1,6 @@
 OBJ = pe_dump.o search.o lru-cache.o seq_list.o
 CFLAG = -Wall -g
-CC = gcc
+CC = gcc -g -O0
 INCLUDE =
 LIB = -lpcap -lpthread
 

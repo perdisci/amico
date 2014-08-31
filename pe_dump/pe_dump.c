@@ -382,8 +382,7 @@ int main(int argc, char **argv) {
 
     printf("Done reading packets!\n\n");
 
-    // quick hack. this needs to be changed to really wait for all dump threads to finish...
-    sleep(3); // wait a few seconds just to make sure file dump threads are done...
+    pthread_exit(NULL); // exit but allows other threads to termiate gracefully
 }
 
 void print_usage(char* cmd) {
@@ -940,8 +939,14 @@ void tflow_destroy(void *v) {
 
 
 static void stop_pcap(int signo) {
+
+    // properly destroy LRU cache fist 
+    lruc_destroy(lruc);
+
+    fprintf(stderr, "\nCaught Signal #%d\n", signo);
     print_stats(signo);
-    exit(1);
+    pthread_exit(NULL);
+
 }
 
 
@@ -1413,6 +1418,7 @@ void dump_pe(struct tcp_flow *tflow) {
     
     tflow->sc_payload = NULL; // avoids buffer to be freed by main thread
     pthread_create(&thread_id,NULL,dump_pe_thread,(void*)tdata);
+    pthread_detach(thread_id); // this allows for the thread data structures to be reclaimed as soon as thread ends
 
 }
 

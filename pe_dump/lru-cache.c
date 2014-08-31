@@ -60,6 +60,7 @@ void ht_destroy(hash_table_t* ht) {
         }
     }
    
+    free(ht->vect);
     free(ht); 
 
 }
