@@ -37,18 +37,30 @@
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
 #define ETH_ADDR_LEN  6
+#define ETH_VLAN_HDR_LEN 4
 #define ETH_HEADER_LEN 14 // lenght of the "standard" ethernet frame
-// #define PCAP_SNAPLEN 1514
-#define PCAP_SNAPLEN 1600 // increased to cover corener cases with eth.len > 1514 (e.g., in case of VLAN tags)
+#define ETH_BASE_FRAME_LEN 1514
+#define PCAP_SNAPLEN ETH_BASE_FRAME_LEN+ETH_VLAN_HDR_LEN // increased to cover corener cases with eth.len > 1514 (e.g., in case of VLAN tags)
 // #define PCAP_SNAPLEN 65535 // increased to cover jumbo frames! this makes things very slow!
 #define MAX_RCV_PACKETS -1
 
+
+/////////////////////////
+// Definition of Packet Headers
 
 /* Ethernet header */
 struct eth_header {
         u_char  eth_dhost[ETH_ADDR_LEN]; 
         u_char  eth_shost[ETH_ADDR_LEN]; 
         u_short eth_type;              
+};
+
+/* Ethernet header including VLAN tag */
+struct eth_vlan_header {
+        u_char  eth_dhost[ETH_ADDR_LEN];
+        u_char  eth_shost[ETH_ADDR_LEN];
+        u_char  eth_vlan_hdr[ETH_VLAN_HDR_LEN];
+        u_short eth_type;
 };
 
 /* IP header */
@@ -92,8 +104,12 @@ struct tcp_header {
         u_short th_sum;                 /* checksum */
         u_short th_urp;                 /* urgent pointer */
 };
+/////////////////////////
 
 
+/////////////////////////
+// The following constants are used to mark the state of the reconstructed HTTP flows
+// not all of the following FLOW_* constant are used 
 #define FLOW_INIT 0
 #define FLOW_SYNACK 1
 #define FLOW_HTTP 2
@@ -105,9 +121,10 @@ struct tcp_header {
 #define FLOW_HTTP_RESP_MZ_NOT_FOUND -6
 #define FLOW_PE_DUMP 7
 
-#define PE_FOUND 1
-#define PE_NOT_FOUND -1
-#define PE_WAIT_FOR_RESP_BODY 0
+#define PE_FOUND 1 // Possible PE file found 
+#define PE_NOT_FOUND -1 // The HTTP response does not seem to carry a PE file
+#define PE_WAIT_FOR_RESP_BODY 0 // Received HTTP reponse header, but need to wait to see at least the first few bytes of the response body
+/////////////////////////
 
 #define KB_SIZE 1024
 #define MAX_PE_FILE_SIZE 2*KB_SIZE*KB_SIZE
@@ -125,8 +142,11 @@ struct tcp_header {
 #define TRUE 1
 #define FALSE 0
 
+
+/////////////////////////
+// Data structure used for TCP/HTTP flow reconstruction
 struct tcp_flow {
-        short flow_status;
+        short flow_state;
 
         // Client->Server half-flow
         char cs_key[MAX_KEY_LEN+1];
@@ -152,6 +172,8 @@ struct tcp_flow {
            connection. This is appended to the name of the dumped file */
         int http_request_count;
 };
+/////////////////////////
+
 
 
 #define PE_FILE_NAME_LEN 120
@@ -226,10 +248,10 @@ int stats_num_new_http_flows = 0;
 int stats_num_new_pe_flows = 0;
 
 
-#define NA_DIR 0
-#define CS_DIR 1
-#define SC_DIR 2
-#define LRUC_SIZE 10000
+#define NA_DIR 0 // flow direction not yet defined
+#define CS_DIR 1 // Current flow direction is Client->Server
+#define SC_DIR 2 // Curretn flow direction is Server->Client
+#define LRUC_SIZE 10000 // Max number of TCP flows tracked for reconstruction at any given time
 
 int main(int argc, char **argv) {
 
@@ -393,23 +415,27 @@ void print_usage(char* cmd) {
 void packet_received(char *args, const struct pcap_pkthdr *header, const u_char *packet) {
 
 
-
+    //////////////////////////////
     if(header->len > PCAP_SNAPLEN) { // skip truncated packets
 
-    #ifdef PE_DEBUG
-    if(debug_level >= VERY_VERY_VERBOSE) {
-	printf("LEN > PCAP_SNAPLEN !!!");
-
-        printf("header->len = %u\n", header->len);
-        printf("PCAP_SNAPLEN = %u\n", PCAP_SNAPLEN);
-        fflush(stdout);
-    }
-    #endif
+        #ifdef PE_DEBUG
+        if(debug_level >= VERY_VERY_VERBOSE) {
+	        printf("LEN > PCAP_SNAPLEN !!!");
+            printf("header->len = %u\n", header->len);
+            printf("PCAP_SNAPLEN = %u\n", PCAP_SNAPLEN);
+            fflush(stdout);
+        }
+        #endif
 
         return;
     }
+    //////////////////////////////
 
 
+    //////////////////////////////
+    // Check what packet type this ethernet frame is carrying
+    #define ETH_TYPE_IP 0x0800
+    #define VLAN8021Q_HDR_TYPE 0x8100
     struct eth_header *ep;
     u_short eth_hdr_len = ETH_HEADER_LEN;
     u_short eth_type = 0;
@@ -417,15 +443,18 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
     ep = (struct eth_header *)packet;
     eth_type = ntohs(ep->eth_type);
     // printf("Ethernet type = %x\n", eth_type);
-    if(eth_type == 0x8100) { // this is a VLAN tagged frame!
-        eth_hdr_len += 4; // 802.1Q Header len = 4 byes
+    if(eth_type == VLAN8021Q_HDR_TYPE) { // this is a VLAN tagged frame!
+        eth_hdr_len += ETH_VLAN_HDR_LEN; // 802.1Q Header len = 4 byes
+
+        struct eth_vlan_header *epvlan = (struct eth_vlan_header *)packet;
+        eth_type = ntohs(epvlan->eth_type); // retrieve the actual ethernet type
     }
 
+    if(eth_type != ETH_TYPE_IP) // this is not an IP packet!
+        return;
 
+    // we count if this is a valid IP packet
     static u_int pkt_count = 0;
-    char pkt_src[24], anon_pkt_src[24];
-    char pkt_dst[24];
-
     pkt_count++;
 
     #ifdef PE_DEBUG
@@ -434,7 +463,11 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
         fflush(stdout);
     }
     #endif
+    //////////////////////////////
 
+
+    //////////////////////////////
+    // Parse IP packets
     const struct eth_header *eth;
     const struct ip_header  *ip;
     const struct tcp_header *tcp;
@@ -453,7 +486,9 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
     payload = (const char*)(packet + eth_hdr_len + ip_hdr_size + tcp_hdr_size);
     payload_size = ntohs(ip->ip_len) - (ip_hdr_size + tcp_hdr_size);
 
-    if(ip_hdr_size < 20 || tcp_hdr_size < 20) {
+    // we skip invalid packets whose headers are too small
+    #define MIN_IP_TCP_HDR_LEN 20
+    if(ip_hdr_size < MIN_IP_TCP_HDR_LEN || tcp_hdr_size < MIN_IP_TCP_HDR_LEN) {
         #ifdef PE_DEBUG
         if(debug_level >= VERY_VERY_VERBOSE) {
             printf("Invalid packet (headers are too small)\n");
@@ -464,13 +499,8 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
         return;
     }
 
-
     #ifdef PE_DEBUG
     if(debug_level >= VERY_VERY_VERBOSE) {
-        // sprintf(pkt_src,"%s:%d",inet_ntoa(ip->ip_src),ntohs(tcp->th_sport));
-        sprintf(pkt_dst,"%s:%d",inet_ntoa(ip->ip_dst),ntohs(tcp->th_dport));
-        // printf("Src = %s\n",pkt_src);
-        printf("Dst = %s\n",pkt_dst);
         printf("ip_len = %u\n", ntohs(ip->ip_len));
         printf("ip_hdr_size = %u\n", ip_hdr_size);
         printf("tcp_hdr_size = %u\n", tcp_hdr_size);
@@ -479,8 +509,10 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
         fflush(stdout);
     }
     #endif
+    //////////////////////////////
 
 
+    //////////////////////////////
     // Skip ACK-only packets or other empty packets
     if(payload_size == 0 && !((tcp->th_flags & TH_SYN) || (tcp->th_flags & TH_FIN) || (tcp->th_flags & TH_RST))) {
         #ifdef PE_DEBUG
@@ -491,16 +523,27 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
         #endif
         return;
     }
+    //////////////////////////////
 
-    char key[MAX_KEY_LEN];
-    char anon_key[MAX_KEY_LEN];
-    char rev_key[MAX_KEY_LEN];
+
+    //////////////////////////////
+    // We now compute the packet IDs (srcIP, scrPort, dstIP, dstPort)
+    #define PACKET_SRC_DST_ID_LEN 21 // String Format: IP:TCP_PORT -> xxx.xxx.xxx.xxx:xxxxx
+    char pkt_src[PACKET_SRC_DST_ID_LEN+1];
+    char pkt_dst[PACKET_SRC_DST_ID_LEN+1];
+    char anon_pkt_src[PACKET_SRC_DST_ID_LEN+1]; // this is useufl for srcIPs that need to be anonymized on-the-fly
+
+    char key[MAX_KEY_LEN+1];
+    char anon_key[MAX_KEY_LEN+1];
+    char rev_key[MAX_KEY_LEN+1];
 
     sprintf(pkt_src,"%s:%d",inet_ntoa(ip->ip_src),ntohs(tcp->th_sport));
     sprintf(pkt_dst,"%s:%d",inet_ntoa(ip->ip_dst),ntohs(tcp->th_dport));
     get_key(key,pkt_src,pkt_dst);
     get_key(rev_key,pkt_dst,pkt_src);
 
+
+    // Compute anonymized source ID
     anon_key[0] = '\0'; // empty
     if(anonymize_srcip) {
         struct in_addr anon_ip_src = ip->ip_src;
@@ -508,18 +551,21 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
         sprintf(anon_pkt_src,"%s:%d",inet_ntoa(anon_ip_src),ntohs(tcp->th_sport));
         get_key(anon_key,anon_pkt_src,pkt_dst);
     }
+    //////////////////////////////
 
+
+    //////////////////////////////
     // Check if this is a new flow
     if(tcp->th_flags == TH_SYN) {
         
-        tflow = init_flow(ip, tcp, key, rev_key, anon_key);
+        tflow = init_flow(ip, tcp, key, rev_key, anon_key); // initialize data structures
         if(tflow == NULL)
             return;
 
-        // in case of 4-tuple collision
+        // in the rare (but possible) case of 4-tuple collisions, we remove the previous flow from cache 
         struct tcp_flow *tmp_tflow; 
         if((tmp_tflow = lookup_flow(lruc, tflow->cs_key)) != NULL) {
-            if(tmp_tflow->flow_status == FLOW_HTTP_RESP_MZ_FOUND) {
+            if(tmp_tflow->flow_state == FLOW_HTTP_RESP_MZ_FOUND) {
                 // record premature end of flow. PE most likely corrupt
                 tmp_tflow->corrupt_pe = TRUE;
 
@@ -529,7 +575,10 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
             remove_flow(lruc, tmp_tflow);
         }
         
+        // store TCP flow into LRU cache; 
+        // notice that the lookup key is the 4-tuple for the Client->Server direction
         store_flow(lruc, tflow->cs_key, tflow); 
+
         #ifdef PE_DEBUG
         if(debug_level >= VERY_VERBOSE) {
             printf("Found a new TCP flow: %s\n",tflow->anon_cs_key);
@@ -539,15 +588,20 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
 
         stats_num_half_open_tcp_flows++;
         return;
-    }
+    } // if this is not a new flow, we keep going...
+    //////////////////////////////
     
 
-    short flow_direction = NA_DIR;
 
-    // flow reverse key (server-to-client 4-tuple identifier)
-    get_key(rev_key,pkt_dst,pkt_src);
+    //////////////////////////////
+    // OK, so now we need to see if we have been tracking this TCP flow
+    short flow_direction = NA_DIR; // flow direction is currently undefined; we need to find out...
 
-    // we check for SC_DIR first, since there are usually many more SC packets than CS packets
+    // We assume this packet is on the Server->Client direction first, 
+    // since there are usually many more SC packets than CS packets.
+    // The flow "reverse key" below is essentially the client-to-server 4-tuple identifier
+    get_key(rev_key,pkt_dst,pkt_src); // this computes the key for LRU cache lookup
+
     if((tflow = lookup_flow(lruc, rev_key)) != NULL) {
         #ifdef PE_DEBUG
         if(debug_level >= VERY_VERY_VERBOSE) {
@@ -556,10 +610,10 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
         }
         #endif
 
-        flow_direction = SC_DIR;
+        flow_direction = SC_DIR; // if there is an entry, we can confirm this is a Server->Client packet
     }
-    else {
-        get_key(rev_key,pkt_src,pkt_dst);
+    else { // if there is no entry, then we check if this is a Client->Server packet
+        get_key(rev_key,pkt_src,pkt_dst); 
 
         if((tflow = lookup_flow(lruc, key)) != NULL) {
             #ifdef PE_DEBUG
@@ -569,13 +623,16 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
             }
             #endif
 
-            flow_direction = CS_DIR;
+            flow_direction = CS_DIR; // if there is an entry, we can confirm this is a Client->Server packet
         }
         else
-            return;
+            return; // we don't have a TCP flow in cache for this packet...
     }
+    //////////////////////////////
     
 
+
+    //////////////////////////////
     // check if it appears the flow is being closed
     if((tcp->th_flags & TH_RST) || (tcp->th_flags & TH_FIN)) {
         #ifdef PE_DEBUG
@@ -586,7 +643,7 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
         #endif
 
         // if this flow contains a PE file, dump it
-        if(tflow->flow_status == FLOW_HTTP_RESP_MZ_FOUND) {
+        if(tflow->flow_state == FLOW_HTTP_RESP_MZ_FOUND) {
             #ifdef PE_DEBUG
             if(debug_level >= VERY_VERBOSE) {
                 printf("PE flow %s is being closed and dumped: payload size = %d\n", tflow->anon_cs_key, tflow->sc_payload_size);
@@ -609,7 +666,7 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
             dump_pe(tflow);
 
             // start looking for another PE file in the same HTTP connection
-            tflow->flow_status = FLOW_HTTP;
+            tflow->flow_state = FLOW_HTTP; // this is actually redundant, because the flow is about to be evicted
         }
             
         // remove this flow from the cache of open tcp flows
@@ -620,18 +677,21 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
         }
         #endif
 
-        remove_flow(lruc, tflow);
+        remove_flow(lruc, tflow); // evict closed TCP flow from cache
         return;
     }
+    //////////////////////////////
 
 
+
+    //////////////////////////////
     if(flow_direction == CS_DIR) {
-    // Clinet to Server packet. Check and update HTTP query status
+    // Clinet to Server packet. Check and update HTTP query state
 
 
         // if first request packet
-        if(tflow->flow_status == FLOW_SYNACK) {
-            if(!is_http_request(payload, payload_size)) {
+        if(tflow->flow_state == FLOW_SYNACK) {
+            if(!is_http_request(payload, payload_size)) { // we are only interested in valid HTTP traffic
                 #ifdef PE_DEBUG
                 if(debug_level >= VERY_VERBOSE) {
                     printf("Non-HTTP TCP flow is being removed from the cache\n");
@@ -643,16 +703,18 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
                 return;
             }
 
-            tflow->flow_status = FLOW_HTTP;
+            tflow->flow_state = FLOW_HTTP;
             stats_num_new_http_flows++;
         }
 
-        if(tflow->flow_status == FLOW_HTTP && !is_http_request(payload, payload_size)) {
+        if(tflow->flow_state == FLOW_HTTP && !is_http_request(payload, payload_size)) {
             // something strage happend... we'll wait for next valid HTTP request
             return;
         }
         
-        if(tflow->flow_status == FLOW_HTTP_RESP_MZ_FOUND) {
+        if(tflow->flow_state == FLOW_HTTP_RESP_MZ_FOUND) { 
+            // we were reconstructing a (possible) PE file, and now there is another client HTTP request...
+            
             #ifdef PE_DEBUG
             if(debug_level >= VERBOSE) {
                 printf("PE flow %s is being closed and dumped (new HTTP req): payload size = %d\n", tflow->anon_cs_key, tflow->sc_payload_size);
@@ -667,14 +729,15 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
             dump_pe(tflow);
 
             // wait for a new HTTP request
-            tflow->flow_status = FLOW_HTTP;
+            tflow->flow_state = FLOW_HTTP;
         }
     
         // We only consider the very first packet of each HTTP req to extract URL and Host
         // Currently we cannot deal with packet reordering for HTTP req in multiple packets
-        if(is_http_request(payload, payload_size) && tflow->flow_status != FLOW_HTTP_RESP_HEADER_WAIT) { 
+        if(is_http_request(payload, payload_size) && tflow->flow_state != FLOW_HTTP_RESP_HEADER_WAIT) { 
+            // We need to record URL, Host, etc., so that we can report them if a PE file occurs
 
-            tflow->flow_status = FLOW_HTTP_RESP_HEADER_WAIT;
+            tflow->flow_state = FLOW_HTTP_RESP_HEADER_WAIT;
             tflow->http_request_count++;
 
             strncpy(tflow->url, get_url(payload, payload_size), MAX_URL_LEN);
@@ -692,17 +755,23 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
                     get_host(payload, payload_size), 
                     get_url(payload, payload_size),
                     get_referer(payload, payload_size));
-                printf("Flow status = %d\n", tflow->flow_status);
+                printf("Flow state = %d\n", tflow->flow_state);
                 fflush(stdout);
             }
             #endif
         } 
 
     }
+    //////////////////////////////
+
+
+    //////////////////////////////
     else if(flow_direction == SC_DIR) {
-    // Server to Client packet. Check and update HTTP response status
+    // Server->Client packet. Check and update HTTP response state
 
         if((tcp->th_flags & TH_SYN) && (tcp->th_flags & TH_ACK)) {
+            // SYN-ACK packet
+
             #ifdef PE_DEBUG
             if(debug_level >= VERY_VERY_VERBOSE) {
                 printf("Found a SYNACK for TCP flow: %s\n",tflow->anon_cs_key);
@@ -712,24 +781,25 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
 
             stats_num_new_tcp_flows++;
 
-            tflow->flow_status = FLOW_SYNACK;
+            tflow->flow_state = FLOW_SYNACK;
             return;
         }
 
 
-        if(tflow->flow_status == FLOW_HTTP) {
+        if(tflow->flow_state == FLOW_HTTP) {
             // we are still waiting for a proper HTTP request
             // don't consider resp packets until that happens
             return;
         }
 
-        if(tflow->flow_status == FLOW_HTTP_RESP_MZ_FOUND && tflow->sc_payload_size > max_pe_file_size) {
-            // This PE file is too large, skip it!
-            tflow->flow_status = FLOW_HTTP;
+        if(tflow->flow_state == FLOW_HTTP_RESP_MZ_FOUND && tflow->sc_payload_size > max_pe_file_size) {
+            // This PE file is too large, skip it! (we are not going to dump it)
+            tflow->flow_state = FLOW_HTTP;
             reset_flow_payload(tflow);
             return;
         }
 
+        // This seems a valid response packet, and we should therefore
         // update tcp seq numbers and payload content
         update_flow(tflow, tcp, payload, payload_size);
         #ifdef PE_DEBUG
@@ -739,28 +809,33 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
         }
         #endif
 
-        if(tflow->flow_status == FLOW_HTTP_RESP_HEADER_WAIT) {
-            // check for end of HTTP resp
+        if(tflow->flow_state == FLOW_HTTP_RESP_HEADER_WAIT) {
+            // OK, we were waiting for a complete HTTP response header
+            // so, we should check if we got it with this packet
 
             #ifdef PE_DEBUG
             if(debug_level >= VERY_VERY_VERBOSE) {
-                printf("Flow status is FLOW_HTTP_RESP_HEADER_WAIT \n");
+                printf("Flow state is FLOW_HTTP_RESP_HEADER_WAIT \n");
                 fflush(stdout);
             }
             #endif
 
-
+            // check if we got a complete HTTP response header...
             if(is_complete_http_resp_header(tflow)) {
-                tflow->flow_status = FLOW_HTTP_RESP_MZ_WAIT;
+                // if so, we can start waiting to see if the response will carry a PE file 
+                tflow->flow_state = FLOW_HTTP_RESP_MZ_WAIT;
 
                 #ifdef PE_DEBUG
                 if(debug_level >= VERY_VERY_VERBOSE) {
-                    printf("Flow status is FLOW_HTTP_RESP_MZ_WAIT \n");
+                    printf("Flow state is FLOW_HTTP_RESP_MZ_WAIT \n");
                     fflush(stdout);
                 }
                 #endif
             }
             else if(tflow->sc_num_payloads > MAX_SC_INIT_PAYLOADS) {
+                // if we received many Server->Client packets, but the HTTP response
+                // is still not complete, we should reset this flow
+
                 #ifdef PE_DEBUG
                 if(debug_level >= VERY_VERY_VERBOSE) {
                     printf("tflow->sc_num_payloads > MAX_SC_INIT_PAYLOADS \n");
@@ -768,37 +843,41 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
                 }
                 #endif
 
-                tflow->flow_status = FLOW_HTTP; // return to wait for new HTTP request
+                tflow->flow_state = FLOW_HTTP; // return to wait for new HTTP request
                 reset_flow_payload(tflow);
 
                 #ifdef PE_DEBUG
                 if(debug_level >= VERY_VERY_VERBOSE) {
-                    printf("Flow status reset to FLOW_HTTP \n");
+                    printf("Flow state reset to FLOW_HTTP \n");
                     fflush(stdout);
                 }
                 #endif
 
-
-                return;
+                return; // wait for next packet
             }
         }
 
-        if(tflow->flow_status == FLOW_HTTP_RESP_MZ_WAIT) {
+        // We have received a complete HTTP response header
+        // so now we should check for a possible PE file carried in the reponse body
+        if(tflow->flow_state == FLOW_HTTP_RESP_MZ_WAIT) {
+
             #ifdef PE_DEBUG
             if(debug_level >= VERY_VERY_VERBOSE) {
-                printf("Flow status is FLOW_HTTP_RESP_MZ_WAIT \n");
+                printf("Flow state is FLOW_HTTP_RESP_MZ_WAIT \n");
                 fflush(stdout);
             }
             #endif
 
-            int resp = PE_NOT_FOUND;
-            int contentlen = get_content_length(tflow->sc_payload, tflow->sc_payload_size);
+            int resp = PE_NOT_FOUND; // still waiting to see if we find a possible PE file
+            int contentlen = get_content_length(tflow->sc_payload, tflow->sc_payload_size); // extract content lenght from HTTP response header
 
-            if (contentlen > 0 && contentlen < MAX_PE_FILE_SIZE) // otherwise we don't even try to check if there is a large PE file... force to abandon this flow!
+            // We first make sure the content length is less than MAX_PE_FILE_SIZE
+            // otherwise we don't even try to check if there is a large PE file... force to abandon this flow!
+            if (contentlen > 0 && contentlen < MAX_PE_FILE_SIZE)
                 resp = contains_pe_file(tflow);
 
-            if(resp == PE_FOUND) {
-                tflow->flow_status = FLOW_HTTP_RESP_MZ_FOUND;
+            if(resp == PE_FOUND) { // Found indication of a possible PE file in the reponse
+                tflow->flow_state = FLOW_HTTP_RESP_MZ_FOUND;
                 stats_num_new_pe_flows++;
                 // #ifdef PE_DEBUG
                 // if(debug_level >= QUIET) {
@@ -807,12 +886,10 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
                 // }
                 // #endif
             }
-            else if(resp == PE_NOT_FOUND) {
-                tflow->flow_status = FLOW_HTTP; // return to wait for new HTTP request
-                reset_flow_payload(tflow);
-            }
-            else if(resp == PE_WAIT_FOR_RESP_BODY) {
-                if(tflow->sc_num_payloads > MAX_SC_INIT_PAYLOADS) {
+            else if(resp == PE_WAIT_FOR_RESP_BODY) { // Need to wait to see at least first few bytes of the reponse body
+                if(tflow->sc_num_payloads > MAX_SC_INIT_PAYLOADS) { 
+                    // if we have already got more than MAX_SC_INIT_PAYLOADS we give up on this reponse
+
                     #ifdef PE_DEBUG
                     if(debug_level >= VERY_VERY_VERBOSE) {
                         printf("tflow->sc_num_payloads > MAX_SC_INIT_PAYLOADS \n");
@@ -821,13 +898,19 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
                     #endif
                     
                     // we are not going to wait any longer
-                    tflow->flow_status = FLOW_HTTP;
-                    reset_flow_payload(tflow);
+                    tflow->flow_state = FLOW_HTTP; // go back to waiting for a new HTTP request
+                    reset_flow_payload(tflow); 
                 }
             }
+            else if(resp == PE_NOT_FOUND) {
+                // The response is likely not carrying what we are interested in
+                tflow->flow_state = FLOW_HTTP; // return to wait for new HTTP request
+                reset_flow_payload(tflow);
+            }
         }
-
     }
+    //////////////////////////////
+
 }
 
 
@@ -838,7 +921,7 @@ struct tcp_flow* init_flow(const struct ip_header  *ip, const struct tcp_header 
     if(tflow == NULL)
         return NULL;
 
-    tflow->flow_status = FLOW_INIT;
+    tflow->flow_state = FLOW_INIT;
     
     strcpy(tflow->cs_key, key);
     if(strlen(anon_key)>0)
@@ -895,7 +978,7 @@ void tflow_destroy(void *v) {
     #endif
 
     if(tflow->sc_payload != NULL) {
-        if(tflow->flow_status == FLOW_HTTP_RESP_MZ_FOUND) {
+        if(tflow->flow_state == FLOW_HTTP_RESP_MZ_FOUND) {
             // record the fact that flow is being unexpectedly terminated, PE most likely corrupt
             tflow->corrupt_pe = TRUE;
 
@@ -1197,7 +1280,7 @@ int contains_pe_file(const struct tcp_flow *tflow) {
 
     #define MIN_PE_PAYLOAD_SIZE 14
     if(tflow->sc_payload_size < MIN_PE_PAYLOAD_SIZE)
-	return PE_WAIT_FOR_RESP_BODY;
+	    return PE_WAIT_FOR_RESP_BODY;
 
     if(strncmp(tflow->sc_payload,"HTTP/",5)!=0) // payload must begin with "HTTP/", otherwise it's not a valid HTTP response
         return PE_NOT_FOUND;
@@ -1604,7 +1687,7 @@ void update_flow(struct tcp_flow *tflow, const struct tcp_header *tcp, const cha
 
     #ifdef PE_DEBUG
     if(debug_level >= VERY_VERY_VERBOSE) {
-        printf("Flow %s is being updated. Flow status = %d \n",tflow->anon_cs_key, tflow->flow_status);
+        printf("Flow %s is being updated. Flow state = %d \n",tflow->anon_cs_key, tflow->flow_state);
         fflush(stdout);
     }
     #endif
@@ -1613,7 +1696,7 @@ void update_flow(struct tcp_flow *tflow, const struct tcp_header *tcp, const cha
     if(p < 0) // this should not be possible, skip it!
         return; 
 
-    if(tflow->flow_status == FLOW_HTTP_RESP_HEADER_WAIT || tflow->flow_status == FLOW_HTTP_RESP_MZ_WAIT) {
+    if(tflow->flow_state == FLOW_HTTP_RESP_HEADER_WAIT || tflow->flow_state == FLOW_HTTP_RESP_MZ_WAIT) {
         #ifdef PE_DEBUG
         if(debug_level >= VERY_VERY_VERBOSE) {
             printf("p=%d, th_seq=%u, sc_init_seq=%u\n",p,ntohl(tcp->th_seq),tflow->sc_init_seq);
@@ -1651,7 +1734,7 @@ void update_flow(struct tcp_flow *tflow, const struct tcp_header *tcp, const cha
 
         return;
     }
-    else if(tflow->flow_status == FLOW_HTTP_RESP_MZ_FOUND) {
+    else if(tflow->flow_state == FLOW_HTTP_RESP_MZ_FOUND) {
         if(p+payload_size < tflow->sc_payload_capacity) {
             memcpy(&(tflow->sc_payload[p]), payload, payload_size);
             seq_list_insert(tflow->sc_seq_list, ntohl(tcp->th_seq), payload_size);
