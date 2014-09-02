@@ -1634,8 +1634,6 @@ void *dump_pe_thread(void* d) {
     fwrite("% ", sizeof(char), 2, pe_file);
     // if(tdata->corrupt_pe) { // This is likely too conservative, and may generate many false positives
     if(tdata->corrupt_pe == CORRUPT_MISSING_DATA || tdata->corrupt_pe == CORRUPT_INVALID_RESPONSE_LEN) { 
-        printf("\n=============== MISSING DATA ===================\n");
-        fflush(stdout);
         // we should trust that our missing data detection algorithm does a good job!
         fwrite(CORRUPT_PE_ALERT, sizeof(char), strlen(CORRUPT_PE_ALERT), pe_file);
 
