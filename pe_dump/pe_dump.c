@@ -137,8 +137,9 @@ struct tcp_header {
 #define MAX_NIC_NAME_LEN 10 // larger than really needed
 #define TMP_SUFFIX_LEN 4
 #define MAX_SC_INIT_PAYLOADS 4
-#define INIT_SC_PAYLOAD 6*KB_SIZE // 6KB are enough to hold 4 TCP segments of 1460 payload bytes each
+#define INIT_SC_PAYLOAD 6*KB_SIZE // 6KB are enough to hold 4 TCP segments of 1460 payload bytes each; this should be plenty to allow us to determine if an HTTP response is carrying a file download of interest
 #define REALLOC_SC_PAYLOAD 128*KB_SIZE // 128KB increments are used when tracking a file download; notice that M_MMAP_THRESHOLD should be set to the same amount to allow for the blocks to be returned to the OS once the process frees them
+#define TRIM_PAYLOAD_ALLOC 8*INIT_SC_PAYLOAD // used to set M_TRIM_THRESHOLD
 
 #define TRUE 1
 #define FALSE 0
@@ -410,6 +411,14 @@ int main(int argc, char **argv) {
     // With this we are trying to make sure that memory blocks used to reconstruct file downloads can be reclaimed by the OS
     if(!mallopt(M_MMAP_THRESHOLD, REALLOC_SC_PAYLOAD)) {
         fprintf(stderr, "mallopt could not set M_MMAP_THRESHOLD to %d!\n", REALLOC_SC_PAYLOAD);
+        exit(1);
+    }
+
+    // We decrease the M_TRIM_THRESHOLD to have a higher chance of releasing freed memory blocks to the OS
+    // This may decrease performance to some extent, in that it tends to increase the number of system calls
+    // so, TRIM_PAYLOAD_ALLOC should not be too much lower than the default value (see mallopt() docs)
+    if(!mallopt(M_TRIM_THRESHOLD, TRIM_PAYLOAD_ALLOC)) {
+        fprintf(stderr, "mallopt could not set M_TRIM_THRESHOLD to %d!\n", TRIM_PAYLOAD_ALLOC);
         exit(1);
     }
 
@@ -1738,6 +1747,8 @@ void update_flow(struct tcp_flow *tflow, const struct tcp_header *tcp, const cha
     if(p < 0) // this should not be possible, skip it!
         return; 
 
+
+    // If we are wiating for a header of possible file, we update the flow payload but do not allocate any more memory
     if(tflow->flow_state == FLOW_HTTP_RESP_HEADER_WAIT || tflow->flow_state == FLOW_HTTP_RESP_MZ_WAIT) {
         #ifdef PE_DEBUG
         if(debug_level >= VERY_VERY_VERBOSE) {
@@ -1746,7 +1757,9 @@ void update_flow(struct tcp_flow *tflow, const struct tcp_header *tcp, const cha
         }
         #endif
 
-
+        // if we have enough initial memory allocated to this flow, we update sequence number, payload content, etc.
+        // otherwise, we don't do anything because we don't need to keep tracking a flow that has no sign of carrying 
+        // a file of interest within the initial INIT_SC_PAYLOAD capacity
         if(p+payload_size < tflow->sc_payload_capacity) {
             // memcpy(&(tflow->sc_payload[p]), payload, MIN(tflow->sc_payload_capacity - p - 1, payload_size));
             memcpy(&(tflow->sc_payload[p]), payload, payload_size);
@@ -1776,6 +1789,8 @@ void update_flow(struct tcp_flow *tflow, const struct tcp_header *tcp, const cha
 
         return;
     }
+
+    // if we are currently tracking a file download, then we should allow for increasing memory allocation to keep reconstructing the flow payload
     else if(tflow->flow_state == FLOW_HTTP_RESP_MZ_FOUND) {
         if(p+payload_size < tflow->sc_payload_capacity) {
             memcpy(&(tflow->sc_payload[p]), payload, payload_size);
