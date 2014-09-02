@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <unistd.h>
+#include <malloc.h>
 #include <errno.h>
 #include <signal.h>
 #include <time.h>
@@ -136,8 +137,8 @@ struct tcp_header {
 #define MAX_NIC_NAME_LEN 10 // larger than really needed
 #define TMP_SUFFIX_LEN 4
 #define MAX_SC_INIT_PAYLOADS 4
-#define INIT_SC_PAYLOAD 1460*4
-#define REALLOC_SC_PAYLOAD 100*1024 // 100KB
+#define INIT_SC_PAYLOAD 6*KB_SIZE // 6KB are enough to hold 4 TCP segments of 1460 payload bytes each
+#define REALLOC_SC_PAYLOAD 128*KB_SIZE // 128KB increments are used when tracking a file download; notice that M_MMAP_THRESHOLD should be set to the same amount to allow for the blocks to be returned to the OS once the process frees them
 
 #define TRUE 1
 #define FALSE 0
@@ -403,6 +404,15 @@ int main(int argc, char **argv) {
 
     printf("BPF FILTER = %s\n", pcap_filter);
     printf("Reading packets...\n\n");
+
+
+    // We need to adjust the memory allocation behavior before we start capturing packets
+    // With this we are trying to make sure that memory blocks used to reconstruct file downloads can be reclaimed by the OS
+    if(!mallopt(M_MMAP_THRESHOLD, REALLOC_SC_PAYLOAD)) {
+        fprintf(stderr, "mallopt could not set M_MMAP_THRESHOLD to %d!\n", REALLOC_SC_PAYLOAD);
+        exit(1);
+    }
+
 
     /* start listening */
     pcap_filter = NULL;
