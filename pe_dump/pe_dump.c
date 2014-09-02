@@ -145,6 +145,12 @@ struct tcp_header {
 
 /////////////////////////
 // Data structure used for TCP/HTTP flow reconstruction
+
+#define CORRUPT_MISSING_DATA 1
+#define CORRUPT_INVALID_RESPONSE_LEN 2
+#define POSSIBLY_CORRUPT_FLOW_ID_COLLISION 3
+#define POSSIBLY_CORRUPT_FLOW_UNEXPECTEDLY_DESTROYED 4
+
 struct tcp_flow {
         short flow_state;
 
@@ -228,7 +234,7 @@ char *get_referer(const char *payload, int payload_size);
 int get_content_length(const char *payload, int payload_size);
 int get_resp_hdr_length(const char *payload, int payload_size);
 int parse_content_length_str(const char *cl_str);
-short is_missing_flow_data(seq_list_t *l, int contentlen);
+short is_missing_flow_data(seq_list_t *l, int flow_payload_len);
 void dump_pe(struct tcp_flow *tflow);
 void *dump_pe_thread(void* d);
 
@@ -567,7 +573,7 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
         if((tmp_tflow = lookup_flow(lruc, tflow->cs_key)) != NULL) {
             if(tmp_tflow->flow_state == FLOW_HTTP_RESP_MZ_FOUND) {
                 // record premature end of flow. PE most likely corrupt
-                tmp_tflow->corrupt_pe = TRUE;
+                tmp_tflow->corrupt_pe = POSSIBLY_CORRUPT_FLOW_ID_COLLISION;
 
                 // dump reconstructed PE file
                 dump_pe(tmp_tflow);
@@ -644,6 +650,7 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
 
         // if this flow contains a PE file, dump it
         if(tflow->flow_state == FLOW_HTTP_RESP_MZ_FOUND) {
+
             #ifdef PE_DEBUG
             if(debug_level >= VERY_VERBOSE) {
                 printf("PE flow %s is being closed and dumped: payload size = %d\n", tflow->anon_cs_key, tflow->sc_payload_size);
@@ -652,13 +659,15 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
             }
             #endif
 
-            if(flow_direction == SC_DIR) {
+            if(flow_direction == SC_DIR && (tcp->th_flags & TH_FIN)) {
+                // the FIN packet may contain data; therefore, we need to update the flow's payload
                 update_flow(tflow, tcp, payload, payload_size);
-                // record what was the last PE byte in the S->C half flow (from server's FIN)
-                seq_list_insert(tflow->sc_seq_list, ntohl(tcp->th_seq), payload_size);
+                // record what was the last PE byte in the S->C half flow (from the SEQ number in server's FIN packet)
+                seq_list_insert(tflow->sc_seq_list, ntohl(tcp->th_seq), payload_size); 
             }
-            else {
-                // record what was the last expected PE byte from the server (from in the client's FIN)
+            else if(flow_direction == CS_DIR && (tcp->th_flags & TH_FIN)) { 
+                // we assume the server is not going to send more data after client sends a FIN packet
+                // record what was the last expected PE byte from the server (from the ACK number in client's FIN packet)
                 seq_list_insert(tflow->sc_seq_list, ntohl(tcp->th_ack), 0);
             }
 
@@ -667,6 +676,7 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
 
             // start looking for another PE file in the same HTTP connection
             tflow->flow_state = FLOW_HTTP; // this is actually redundant, because the flow is about to be evicted
+
         }
             
         // remove this flow from the cache of open tcp flows
@@ -980,7 +990,7 @@ void tflow_destroy(void *v) {
     if(tflow->sc_payload != NULL) {
         if(tflow->flow_state == FLOW_HTTP_RESP_MZ_FOUND) {
             // record the fact that flow is being unexpectedly terminated, PE most likely corrupt
-            tflow->corrupt_pe = TRUE;
+            tflow->corrupt_pe = POSSIBLY_CORRUPT_FLOW_UNEXPECTEDLY_DESTROYED;
 
             // dump reconstructed PE file
             dump_pe(tflow);
@@ -1274,6 +1284,9 @@ int parse_content_length_str(const char *cl_str) {
 }
 
 
+// This function returns PE_FOUND if we find a possible PE file
+// If the MZ magic number is found, we will attempt to reconstruct and log the file
+// We can then check offline if the downloaded file is really a PE file, otherwise we delete it
 int contains_pe_file(const struct tcp_flow *tflow) {
     if(tflow->sc_payload == NULL)
         return PE_WAIT_FOR_RESP_BODY;
@@ -1311,16 +1324,20 @@ int contains_pe_file(const struct tcp_flow *tflow) {
 }
 
 
+
+
+
+
 // looks for gaps in the list of TCP sequence numbers
 // returns TRUE is gaps are found
-short is_missing_flow_data(seq_list_t *l, int contentlen) {
+short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
     // detect gaps in the sequence numbers
 
     seq_list_entry_t *e;
     u_int seq_num, psize, m;
     u_int expected_seq_num, tmp_expected_seq_num, max_seq_num;
     short gap_detected, terminate_loop;
-    int estimated_contentlen;
+    int estimated_flow_payload_len;
 
 
     // check if this is a non-empy seq_list
@@ -1330,6 +1347,9 @@ short is_missing_flow_data(seq_list_t *l, int contentlen) {
         return TRUE;
 
     // get the max sequence number in the list
+    // notice that the list is not ordered; packet (seq_num, psize) pairs are stored in order of arrival
+    // seq_num = TCP sequence number of Server->Client segment
+    // psize = payload size of Server->Client TCP segment
     seq_list_restart_from_head(l); // makes sure we start from the head of the list
     e = seq_list_next(l);
     max_seq_num = 0;
@@ -1350,15 +1370,18 @@ short is_missing_flow_data(seq_list_t *l, int contentlen) {
     seq_num = e->i;
     psize = e->j;
 
-    estimated_contentlen = max_seq_num - seq_num;
-    if(estimated_contentlen < contentlen)
+    estimated_flow_payload_len = max_seq_num - seq_num;
+    if(estimated_flow_payload_len < flow_payload_len) // if true, it means we are missing some bytes
         return TRUE;
+    if(estimated_flow_payload_len > flow_payload_len) // this should be impossible, something went really wrong!
+        return TRUE; // not really missing data; signals a problem in the file reconstruction from which we cannot recover
+        // TODO: maybe we should return an error code here, rather than TRUE/FALSE
 
 
     #ifdef PE_DEBUG
     if(debug_level >= VERY_VERY_VERBOSE) {
         printf("max_seq_num = %u  ", max_seq_num);
-        printf("estimated content length = %u \n", estimated_contentlen);
+        printf("estimated content length = %u \n", estimated_flow_payload_len);
         seq_list_print(l);
         fflush(stdout);
     }
@@ -1371,7 +1394,7 @@ short is_missing_flow_data(seq_list_t *l, int contentlen) {
     do {
         gap_detected = FALSE; 
 
-        while((e = seq_list_next(l)) != NULL) {
+        while((e = seq_list_next(l)) != NULL) { // this while loop does a pass on the entire list of sequence numbers
             seq_num = e->i;
             psize = e->j;
 
@@ -1441,7 +1464,8 @@ short is_missing_flow_data(seq_list_t *l, int contentlen) {
     }
     while(gap_detected && !terminate_loop);
 
-
+    // if gap_detected remains TRUE after scanning the sequence numbers list (possibly) muliple times
+    // then it means that we are really missing data
     if(gap_detected) { // detected missing data
         #ifdef PE_DEBUG
         if(debug_level >= VERY_VERY_VERBOSE) 
@@ -1459,6 +1483,7 @@ short is_missing_flow_data(seq_list_t *l, int contentlen) {
 
     return FALSE; // everything looks fine!
 }
+
 
 
 void dump_pe(struct tcp_flow *tflow) {
@@ -1570,8 +1595,9 @@ void *dump_pe_thread(void* d) {
     fwrite(tdata->referer, sizeof(char), strlen(tdata->referer), pe_file);
     fwrite("\n", sizeof(char), 1, pe_file);
 
-    int contentlen = get_content_length(tdata->pe_payload, tdata->pe_payload_size);
     int httphdrlen = get_resp_hdr_length(tdata->pe_payload, tdata->pe_payload_size);
+    int contentlen = get_content_length(tdata->pe_payload, tdata->pe_payload_size);
+    int flow_payload_len = httphdrlen + contentlen;
 
     #ifdef PE_DEBUG    
     if(debug_level >= VERY_VERY_VERBOSE) {
@@ -1580,11 +1606,11 @@ void *dump_pe_thread(void* d) {
     }
     #endif
 
-    if(contentlen <= 0 || httphdrlen <= 0)
-        tdata->corrupt_pe = TRUE; 
+    if(contentlen <= 0 || httphdrlen <= 0) // this should never happen, but we check anyway
+        tdata->corrupt_pe = CORRUPT_INVALID_RESPONSE_LEN; 
 
-    if((contentlen+httphdrlen) > tdata->pe_payload_size)
-	    tdata->corrupt_pe = TRUE;
+    if(flow_payload_len > tdata->pe_payload_size) // if true, we are clearly missing data
+	    tdata->corrupt_pe = CORRUPT_MISSING_DATA;
 
     #ifdef PE_DEBUG    
     if(debug_level >= VERY_VERY_VERBOSE) {
@@ -1597,12 +1623,20 @@ void *dump_pe_thread(void* d) {
     printf("\n===\n");
     #endif
 
+    // check if there is any gap in the list of TCP sequence numbers
+    // also check if total size of reconstructed payloads matches the expected HTTP Content Lenght
+    short missing_data = is_missing_flow_data(tdata->sc_seq_list, flow_payload_len);
+    if(missing_data)
+        tdata->corrupt_pe = CORRUPT_MISSING_DATA;
+
+
     #define CORRUPT_PE_ALERT "CORRUPT_PE"
-    short missing_data = is_missing_flow_data(tdata->sc_seq_list, contentlen);
-
-
     fwrite("% ", sizeof(char), 2, pe_file);
-    if(tdata->corrupt_pe || missing_data) {
+    // if(tdata->corrupt_pe) { // This is likely too conservative, and may generate many false positives
+    if(tdata->corrupt_pe == CORRUPT_MISSING_DATA || tdata->corrupt_pe == CORRUPT_INVALID_RESPONSE_LEN) { 
+        printf("\n=============== MISSING DATA ===================\n");
+        fflush(stdout);
+        // we should trust that our missing data detection algorithm does a good job!
         fwrite(CORRUPT_PE_ALERT, sizeof(char), strlen(CORRUPT_PE_ALERT), pe_file);
 
         #ifdef PE_DEBUG

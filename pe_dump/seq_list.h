@@ -21,10 +21,18 @@
 
 typedef unsigned int u_int;
 
+
+//////////////////////////////////////////////////////////////
+// This is an implementation of a siple list that holds pairs:
+// (sequence_number, payload_size)
+//////////////////////////////////////////////////////////////
+
 typedef struct seq_list_entry {
 
-    u_int i;
-    u_int j;
+    // TODO: the following fields, i and j, should really be renamed!
+
+    u_int i; // sequence number
+    u_int j; // payload size 
     struct seq_list_entry *next;
 
 } seq_list_entry_t;
