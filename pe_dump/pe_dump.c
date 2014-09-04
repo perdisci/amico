@@ -127,6 +127,9 @@ struct tcp_header {
 #define PE_WAIT_FOR_RESP_BODY 0 // Received HTTP reponse header, but need to wait to see at least the first few bytes of the response body
 /////////////////////////
 
+
+/////////////////////////
+// Other useful constants...
 #define KB_SIZE 1024
 #define MAX_PE_FILE_SIZE 2*KB_SIZE*KB_SIZE
 #define MAX_KEY_LEN 60 // larger than really needed
@@ -144,15 +147,20 @@ struct tcp_header {
 #define TRUE 1
 #define FALSE 0
 
-
-/////////////////////////
-// Data structure used for TCP/HTTP flow reconstruction
+#define NA_DIR 0 // flow direction not yet defined
+#define CS_DIR 1 // Current flow direction is Client->Server
+#define SC_DIR 2 // Curretn flow direction is Server->Client
+#define LRUC_SIZE 10000 // Max number of TCP flows tracked for reconstruction at any given time
 
 #define CORRUPT_MISSING_DATA 1
 #define CORRUPT_INVALID_RESPONSE_LEN 2
 #define POSSIBLY_CORRUPT_FLOW_ID_COLLISION 3
 #define POSSIBLY_CORRUPT_FLOW_UNEXPECTEDLY_DESTROYED 4
+/////////////////////////
 
+
+/////////////////////////
+// Data structure used for TCP/HTTP flow reconstruction
 struct tcp_flow {
         short flow_state;
 
@@ -183,7 +191,8 @@ struct tcp_flow {
 /////////////////////////
 
 
-
+/////////////////////////
+// Data structure used by file dump thread
 #define PE_FILE_NAME_LEN 120
 struct mz_payload_thread {
         char pe_file_name[PE_FILE_NAME_LEN+1];
@@ -195,6 +204,9 @@ struct mz_payload_thread {
         u_int pe_payload_size;
         seq_list_t *sc_seq_list;
 };
+/////////////////////////
+
+
 
 
 pcap_t *pch;             /* packet capture handler */
@@ -241,26 +253,27 @@ void dump_pe(struct tcp_flow *tflow);
 void *dump_pe_thread(void* d);
 
 
+///////////////////////////
 // Debug levels 
-// #define PE_DEBUG 1
+// #define PE_DEBUG 1 // Debug messages will work only if PE_DEBUG is defined
 #define QUIET 1
 #define VERBOSE 2
 #define VERY_VERBOSE 3
 #define VERY_VERY_VERBOSE 4
 int debug_level = QUIET;
+///////////////////////////
 
-
+///////////////////////////
+// Network traffic stats
 int stats_num_half_open_tcp_flows = 0;
 int stats_num_new_tcp_flows = 0;
 int stats_num_new_http_flows = 0;
 int stats_num_new_pe_flows = 0;
+///////////////////////////
 
 
-#define NA_DIR 0 // flow direction not yet defined
-#define CS_DIR 1 // Current flow direction is Client->Server
-#define SC_DIR 2 // Curretn flow direction is Server->Client
-#define LRUC_SIZE 10000 // Max number of TCP flows tracked for reconstruction at any given time
 
+///////////////////////////
 int main(int argc, char **argv) {
 
     char *pcap_filter;
@@ -288,47 +301,48 @@ int main(int argc, char **argv) {
     while ((op = getopt(argc, argv, "hi:r:d:f:D:L:K:A")) != -1) {
         switch (op) {
 
-        case 'h':
+        case 'h': // shows command usage/help
             print_usage(argv[0]);
             exit(1);
             break;
-
-        case 'A':
+ 
+        case 'A': // is set, this flag turns off the default on-the-fly srcIP anonymization
             anonymize_srcip = FALSE;
             break;
 
-        case 'i':
+        case 'i': // NIC to listen from
             nic_name = strdup(optarg);
             break;
 
-        case 'r':
+        case 'r': // Read packets from .pcap file instead of NIC
             pcap_file = optarg;
             break;
 
-        case 'd':
+        case 'd': // Dump directory where raw HTTP responses containing PF files are dropped
             dump_dir = optarg;
             break;
 
-        case 'f':
+        case 'f': // Used to express BPF filter
             pcap_filter = optarg;
             break;
 
-        case 'D':
+        case 'D': // Defines level of debug messages (only useful if PE_DEBUG is defined)
             if(atoi(optarg) >= QUIET)
                 debug_level = atoi(optarg);
             break;
 
-        case 'L':
+        case 'L': // Specify size of LRU cache (max number of entries)
             if(atoi(optarg) > 0)
                 lruc_size = atoi(optarg);
             break;
 
-        case 'K':
+        case 'K': // Max acceptable size of reconstructed PE files
             if(atoi(optarg) > 0)
                 max_pe_file_size = atoi(optarg) * KB_SIZE; // size in KB
             break;
         }
     }
+
 
     // initialize anonymization key
     if(anonymize_srcip)
@@ -338,10 +352,14 @@ int main(int argc, char **argv) {
     printf("MAX PE FILE SIZE = %d KB\n", max_pe_file_size/KB_SIZE);
     printf("LRU CACHE SIZE = %d\n",lruc_size);
 
+
+    // Set signal handlers
     signal(SIGTERM, stop_pcap);
     signal(SIGINT,  stop_pcap);
     signal(SIGUSR1, print_stats);
 
+
+    // Make sure we know where to store the reconstructed files
     if(dump_dir == NULL) {
         fprintf(stderr, "dump_dir must to be specified\n");
         print_usage(argv[0]);
@@ -359,7 +377,8 @@ int main(int argc, char **argv) {
     }
 
 
-        
+
+    // Initialize LRU cache used to track/reassemble TCP flows        
     lruc = lruc_init(lruc_size, tflow_destroy);
 
 
@@ -382,7 +401,7 @@ int main(int argc, char **argv) {
         printf("Listening on %s\n", nic_name);
     }
 
-    /* make sure we are capturing from Ethernet device */
+    /* make sure we are capturing from an Ethernet device */
     if(pcap_datalink(pch) != DLT_EN10MB) {
         fprintf(stderr, "Device is not an Ethernet\n");
         exit(EXIT_FAILURE);
@@ -390,8 +409,7 @@ int main(int argc, char **argv) {
 
     /* BPF filter */
     if(pcap_filter == NULL)
-        // pcap_filter = "tcp"; // default filter
-        pcap_filter = NULL; // default filter
+        pcap_filter = "tcp"; // default filter
     if(pcap_compile(pch, &pcf, pcap_filter, 0, net) == -1) {
         fprintf(stderr, "Couldn't parse filter %s: %s\n",pcap_filter, pcap_geterr(pch));
         exit(1);
@@ -404,7 +422,7 @@ int main(int argc, char **argv) {
     }
 
     printf("BPF FILTER = %s\n", pcap_filter);
-    printf("Reading packets...\n\n");
+
 
 
     // We need to adjust the memory allocation behavior before we start capturing packets
@@ -424,7 +442,8 @@ int main(int argc, char **argv) {
 
 
     /* start listening */
-    pcap_filter = NULL;
+    printf("Reading packets...\n\n");
+
     pcap_loop(pch, MAX_RCV_PACKETS, callback, NULL);
 
     printf("Done reading packets!\n\n");
@@ -433,8 +452,23 @@ int main(int argc, char **argv) {
 }
 
 void print_usage(char* cmd) {
-    fprintf(stderr, "Usage: %s [-i nic] [-r pcap_file] -d dump_dir [-f \"pcap_filter\"] [-L lru_cache_size] [-K max_pe_file_size (KB)] [-D debug_level] [-A]\n",cmd);
+
+    fprintf(stderr, "\n");
+    fprintf(stderr, "Usage: %s [-i NIC] [-r pcap_file] [-A] -d dump_dir [-f \"pcap_filter\"] [-L lru_cache_size] [-K max_pe_file_size (KB)] [-D debug_level] \n",cmd);
+    fprintf(stderr, "\n");
+
+
+    fprintf(stderr, "\t -i : Use to specify network interface (e.g., -i eth0)\n");
+    fprintf(stderr, "\t -r : Read from .pcap file instead of NIC (e.g., -r file.pcap)\n");  
+    fprintf(stderr, "\t -A : If specified, this flag will turn off the on-the-fly srcIP anonymization\n");
+    fprintf(stderr, "\t -d : Director where raw HTTP respnoses containing reconstructed files are stored (e.g., -d ./dumps\n");
+    fprintf(stderr, "\t -f : Specify BPF filter (e.g., -f \"tcp port 80\")\n");
+    fprintf(stderr, "\t -L : Change LRU cache size (default = 10000 entries)\n");
+    fprintf(stderr, "\t -K : Change max accepted reconstructed file size, in KB (e.g., -K 1024)\n");
+    fprintf(stderr, "\t -D : Specify debug_level (value from 0-4)\n");
+    fprintf(stderr, "\n");
 }
+
 
 
 void packet_received(char *args, const struct pcap_pkthdr *header, const u_char *packet) {
