@@ -409,7 +409,8 @@ int main(int argc, char **argv) {
 
     /* BPF filter */
     if(pcap_filter == NULL)
-        pcap_filter = "tcp"; // default filter
+        pcap_filter = NULL;
+        // pcap_filter = "tcp"; // default filter
     if(pcap_compile(pch, &pcf, pcap_filter, 0, net) == -1) {
         fprintf(stderr, "Couldn't parse filter %s: %s\n",pcap_filter, pcap_geterr(pch));
         exit(1);
@@ -472,7 +473,6 @@ void print_usage(char* cmd) {
 
 
 void packet_received(char *args, const struct pcap_pkthdr *header, const u_char *packet) {
-
 
     //////////////////////////////
     if(header->len > PCAP_SNAPLEN) { // skip truncated packets
@@ -713,34 +713,50 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
             #endif
 
             if(flow_direction == SC_DIR && (tcp->th_flags & TH_FIN)) {
-                // the FIN packet may contain data; therefore, we need to update the flow's payload
-                update_flow(tflow, tcp, payload, payload_size);
-                // record what was the last PE byte in the S->C half flow (from the SEQ number in server's FIN packet)
-                seq_list_insert(tflow->sc_seq_list, ntohl(tcp->th_seq), payload_size); 
+                if(payload_size > 0) {
+                    // the FIN packet may contain data; therefore, we need to update the flow's payload
+                    update_flow(tflow, tcp, payload, payload_size);
+                    // record what was the last PE byte in the S->C half flow (from the SEQ number in server's FIN packet)
+                    seq_list_insert(tflow->sc_seq_list, ntohl(tcp->th_seq), payload_size); 
+                }
             }
             else if(flow_direction == CS_DIR && (tcp->th_flags & TH_FIN)) { 
                 // we assume the server is not going to send more data after client sends a FIN packet
                 // record what was the last expected PE byte from the server (from the ACK number in client's FIN packet)
-                seq_list_insert(tflow->sc_seq_list, ntohl(tcp->th_ack), 0);
+                seq_list_insert(tflow->sc_seq_list, ntohl(tcp->th_ack)-1, 0); // the -1 is due to how seq# are defined at FIN-ACK
+
+                // dump the reconstructed PE file
+                dump_pe(tflow);
+
+                // start looking for another PE file in the same HTTP connection
+                tflow->flow_state = FLOW_HTTP; // this is actually redundant, because the flow is about to be evicted
+
+                remove_flow(lruc, tflow); // evict closed TCP flow from cache
             }
 
+            /***************************/
+            /* NOTE: Now we dump a flow and remove it from the cache only if flow_direction == CS_DIR */
+            /* The reason is that in some cases a Server FIN may arrive before the last useful data packets, so we should wait */
             // dump the reconstructed PE file
-            dump_pe(tflow);
+            // dump_pe(tflow);
 
             // start looking for another PE file in the same HTTP connection
-            tflow->flow_state = FLOW_HTTP; // this is actually redundant, because the flow is about to be evicted
-
+            // tflow->flow_state = FLOW_HTTP; // this is actually redundant, because the flow is about to be evicted
+            /***************************/
         }
+        else { // if there was not file dump being tracked...
             
-        // remove this flow from the cache of open tcp flows
-        #ifdef PE_DEBUG
-        if(debug_level >= VERY_VERBOSE) {
-            printf("TCP flow is being removed from the cache\n");
-            fflush(stdout);
-        }
-        #endif
+            // remove this flow from the cache of open tcp flows
+            #ifdef PE_DEBUG
+            if(debug_level >= VERY_VERBOSE) {
+                printf("TCP flow is being removed from the cache\n");
+                fflush(stdout);
+            }
+            #endif
 
-        remove_flow(lruc, tflow); // evict closed TCP flow from cache
+            remove_flow(lruc, tflow); // evict closed TCP flow from cache
+        }
+
         return;
     }
     //////////////////////////////
@@ -1388,7 +1404,7 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
 
     seq_list_entry_t *e;
     u_int seq_num, psize, m;
-    u_int expected_seq_num, tmp_expected_seq_num, max_seq_num;
+    u_int expected_seq_num, max_seq_num, init_seq_num;
     short gap_detected, terminate_loop;
     int estimated_flow_payload_len;
 
@@ -1405,25 +1421,31 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
     // psize = payload size of Server->Client TCP segment
     seq_list_restart_from_head(l); // makes sure we start from the head of the list
     e = seq_list_next(l);
+    init_seq_num = e->i;
     max_seq_num = 0;
     while(e != NULL) {
         seq_num = e->i;
         psize = e->j;
         m = seq_num+psize;
-        if(m > max_seq_num)
+        if(m > max_seq_num) {
             max_seq_num = m;
+        }
 
         e = seq_list_next(l);
     }
 
+    estimated_flow_payload_len = max_seq_num - init_seq_num;
 
-    // get the first sequence number in the list
-    seq_list_restart_from_head(l); // makes sure we start from the head of the list
-    e = seq_list_next(l);
-    seq_num = e->i;
-    psize = e->j;
+    #ifdef PE_DEBUG
+    if(debug_level >= VERY_VERY_VERBOSE) {
+        seq_list_print(l);
+        printf("max_seq_num = %u  ", max_seq_num);
+        printf("flow_payload_len = %u \n", flow_payload_len);
+        printf("estimated content length = %u \n", estimated_flow_payload_len);
+        fflush(stdout);
+    }
+    #endif
 
-    estimated_flow_payload_len = max_seq_num - seq_num;
     if(estimated_flow_payload_len < flow_payload_len) // if true, it means we are missing some bytes
         return TRUE;
     if(estimated_flow_payload_len > flow_payload_len) // this should be impossible, something went really wrong!
@@ -1431,91 +1453,66 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
         // TODO: maybe we should return an error code here, rather than TRUE/FALSE
 
 
-    #ifdef PE_DEBUG
-    if(debug_level >= VERY_VERY_VERBOSE) {
-        printf("max_seq_num = %u  ", max_seq_num);
-        printf("estimated content length = %u \n", estimated_flow_payload_len);
-        seq_list_print(l);
-        fflush(stdout);
-    }
-    #endif
+    seq_list_restart_from_head(l); // makes sure we start from the head of the list
+    seq_list_entry_t *s, *s_gap;
 
-    expected_seq_num = seq_num + psize; // initialize first expected_seq_num
-    tmp_expected_seq_num = expected_seq_num;
+    s = seq_list_next(l);
+    u_int next_seq_num = s->i;
+    u_int old_next_seq_num = next_seq_num;
+    u_int payload_size = 0;
 
-    terminate_loop = FALSE;
-    do {
-        gap_detected = FALSE; 
-
-        while((e = seq_list_next(l)) != NULL) { // this while loop does a pass on the entire list of sequence numbers
-            seq_num = e->i;
-            psize = e->j;
-
-            if(seq_num == 0 && psize == 0) // ignore pairs marked to zero
-                continue;
-
-            #ifdef PE_DEBUG
-            if(debug_level >= VERY_VERY_VERBOSE) {
-                printf("seq_num = %u , psize = %u \n", seq_num, psize);
-                fflush(stdout);
-            }
-            #endif
-
-            // ignore retransmissions
-            if(seq_num <= tmp_expected_seq_num && (seq_num+psize) <= tmp_expected_seq_num)
-                continue;
-        
-            // account for reordering or retransmissions with overlapping sequence numbers
-            if(seq_num <= tmp_expected_seq_num && (seq_num+psize) >= tmp_expected_seq_num) {
-                tmp_expected_seq_num = seq_num + psize;
-
-                #ifdef PE_DEBUG
-                if(debug_level >= VERY_VERY_VERBOSE) {
-                    printf("tmp_expected_seq_num = %u \n", tmp_expected_seq_num);
-                    fflush(stdout);
-                }
-                #endif
-
-                // mark to zero, so that this pair of (seq_num,psize) will not be considered anymore
-                e->i = 0;
-                e->j = 0;
-            }
-            else {
-                #ifdef PE_DEBUG
-                if(debug_level >= VERY_VERY_VERBOSE) {
-                    printf("====> FOUND GAP: ");
-                    printf("seq_num = %u  ", seq_num);
-                    printf("psize = %u  ", psize);
-                    printf("tmp_expected_seq_num = %u \n", tmp_expected_seq_num);
-                    fflush(stdout);
-                }
-                #endif
-                gap_detected = TRUE;
-            }
-
-        }
-
-        if(tmp_expected_seq_num == expected_seq_num) 
-        // we either reached the end, or noting has improved in this iteration
-            terminate_loop = TRUE; // do not "break", because we want to execute the following code before exiting the while
-
-
-        // prepare for a new iteration
-        expected_seq_num = tmp_expected_seq_num;
-        seq_list_restart_from_head(l); // makes sure we start from the head of the list
+    gap_detected = FALSE;
+    while(next_seq_num < max_seq_num) {
 
         #ifdef PE_DEBUG
         if(debug_level >= VERY_VERY_VERBOSE) {
-            printf("max_seq_num = %u  ", max_seq_num);
-            printf("expected_seq_num = %u  ", expected_seq_num);
-            printf("tmp_expected_seq_num = %u  ", tmp_expected_seq_num);
-            printf("GAP = %d  \n", gap_detected);
+            printf("S1 = %u\n", seq_num);
+            printf("Next Seq = %u\n", next_seq_num);
             fflush(stdout);
         }
         #endif
 
+        while(s != NULL) { // at every itration, finds the lagest "contiguous" next_seq_num
+            seq_num = s->i;
+            payload_size = s->j;
+
+            if(payload_size > 0) { // skeep empty packets
+                if(seq_num <= next_seq_num && seq_num+payload_size > next_seq_num) { // NO GAP (YET)
+                    // printf("++ S1 = %u\n", seq_num);
+                    // printf("++ Next Seq = %u\n", next_seq_num);
+                    next_seq_num = seq_num+payload_size;
+                    // printf("++ New Next Seq = %u\n", next_seq_num);
+                }
+                else if(!gap_detected && seq_num > next_seq_num) {
+                    gap_detected = TRUE;   
+                    s_gap = s; // we will restart another loop from this list element, to save time
+                    // printf("++ GAP - Seq = %u\n", seq_num);
+                }
+            }
+            s = s->next;
+        }
+
+        if(next_seq_num <= old_next_seq_num) { // no progress in this cycle, we should stop here
+
+            #ifdef PE_DEBUG
+            if(debug_level >= VERY_VERY_VERBOSE) {    
+                printf("+++ No progress filling the gaps!\n");
+                printf("+++ Next Seq = %u\n", next_seq_num);
+                printf("+++ Max Seq = %u\n", max_seq_num);
+                printf("+++ GAP = %u\n", gap_detected);
+                fflush(stdout);
+            }
+            #endif
+
+            break; 
+        }
+
+        // start another loop to see if we can fill the gaps
+        s = s_gap; // we restart exploring the list of sequence numbers from the gap
+        old_next_seq_num = next_seq_num;
+        gap_detected = FALSE;
     }
-    while(gap_detected && !terminate_loop);
+
 
     // if gap_detected remains TRUE after scanning the sequence numbers list (possibly) muliple times
     // then it means that we are really missing data
@@ -1527,7 +1524,6 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
 
         return TRUE;
     }
-
 
     #ifdef PE_DEBUG
     if(debug_level >= VERY_VERY_VERBOSE)
