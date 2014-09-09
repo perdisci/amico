@@ -725,24 +725,9 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
                 // record what was the last expected PE byte from the server (from the ACK number in client's FIN packet)
                 seq_list_insert(tflow->sc_seq_list, ntohl(tcp->th_ack)-1, 0); // the -1 is due to how seq# are defined at FIN-ACK
 
-                // dump the reconstructed PE file
-                dump_pe(tflow);
-
-                // start looking for another PE file in the same HTTP connection
-                tflow->flow_state = FLOW_HTTP; // this is actually redundant, because the flow is about to be evicted
-
+                dump_pe(tflow); // dump the reconstructed PE file
                 remove_flow(lruc, tflow); // evict closed TCP flow from cache
             }
-
-            /***************************/
-            /* NOTE: Now we dump a flow and remove it from the cache only if flow_direction == CS_DIR */
-            /* The reason is that in some cases a Server FIN may arrive before the last useful data packets, so we should wait */
-            // dump the reconstructed PE file
-            // dump_pe(tflow);
-
-            // start looking for another PE file in the same HTTP connection
-            // tflow->flow_state = FLOW_HTTP; // this is actually redundant, because the flow is about to be evicted
-            /***************************/
         }
         else { // if there was not file dump being tracked...
             
@@ -1421,6 +1406,9 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
     // psize = payload size of Server->Client TCP segment
     seq_list_restart_from_head(l); // makes sure we start from the head of the list
     e = seq_list_next(l);
+    if(e == NULL) // This should never happen; if it does, something is very wrong!
+        return TRUE;
+
     init_seq_num = e->i;
     max_seq_num = 0;
     while(e != NULL) {
@@ -1457,6 +1445,9 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
     seq_list_entry_t *s, *s_gap;
 
     s = seq_list_next(l);
+    if(s == NULL) // This should never happen; if it does, something is very wrong!
+        return TRUE;
+
     u_int next_seq_num = s->i;
     u_int old_next_seq_num = next_seq_num;
     u_int payload_size = 0;
