@@ -24,6 +24,7 @@ seq_list_t *seq_list_init(void) {
     l->tail = NULL;
     l->next = NULL;
 
+    return l;
 }
 
 void seq_list_destroy(seq_list_t* l) {

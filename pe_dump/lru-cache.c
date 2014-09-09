@@ -174,7 +174,7 @@ int lruc_insert_str(lru_cache_t *lruc, const char *key, const char* value) {
 int lruc_insert(lru_cache_t *lruc, const char *key, void* value) {
 
     if(key == NULL)
-        return;
+        return -1;
 
     if(lruc_search(lruc, key)!=NULL) 
         return -1;

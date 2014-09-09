@@ -175,7 +175,7 @@ struct tcp_flow {
         char sc_key[MAX_KEY_LEN+1];
         u_int sc_init_seq;     // The sequence number of the first packet in the payload buffer 
         u_int sc_expected_seq; // The next expected sequence number 
-        u_char* sc_payload;
+        char* sc_payload;
         u_int sc_payload_size;     // Indicates the current number of bytes in the flow payload 
         u_int sc_payload_capacity; // Indicates the current capacity of the payload buffer 
         u_int sc_num_payloads; // number of packets sent with payload_size > 0
@@ -278,14 +278,13 @@ int main(int argc, char **argv) {
 
     char *pcap_filter;
     char *pcap_file;
-    bpf_u_int32 net;
+    // bpf_u_int32 net;
     char err_str[PCAP_ERRBUF_SIZE];
 
     int lruc_size = LRUC_SIZE;
 
     pcap_handler callback = (pcap_handler)packet_received;
 
-    int op, opterr;
 
     if(argc < 3) {
         print_usage(argv[0]);
@@ -298,6 +297,8 @@ int main(int argc, char **argv) {
     pcap_filter = NULL;
     nic_name = NULL;
     pcap_file = NULL;
+
+    int op;
     while ((op = getopt(argc, argv, "hi:r:d:f:D:L:K:A")) != -1) {
         switch (op) {
 
@@ -411,7 +412,7 @@ int main(int argc, char **argv) {
     if(pcap_filter == NULL)
         pcap_filter = NULL;
         // pcap_filter = "tcp"; // default filter
-    if(pcap_compile(pch, &pcf, pcap_filter, 0, net) == -1) {
+    if(pcap_compile(pch, &pcf, pcap_filter, 0, PCAP_NETMASK_UNKNOWN) == -1) {
         fprintf(stderr, "Couldn't parse filter %s: %s\n",pcap_filter, pcap_geterr(pch));
         exit(1);
     }
@@ -527,7 +528,6 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
 
     //////////////////////////////
     // Parse IP packets
-    const struct eth_header *eth;
     const struct ip_header  *ip;
     const struct tcp_header *tcp;
     const char* payload;
@@ -537,7 +537,6 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
     u_int tcp_hdr_size;
     int payload_size;
 
-    eth = (const struct eth_header*)packet;
     ip  = (const struct ip_header*)(packet + eth_hdr_len);
     ip_hdr_size = IP_HEADER_LEN(ip)*4;
     tcp = (const struct tcp_header*)(packet + eth_hdr_len + ip_hdr_size); 
@@ -606,7 +605,7 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
     anon_key[0] = '\0'; // empty
     if(anonymize_srcip) {
         struct in_addr anon_ip_src = ip->ip_src;
-        anon_ip_src.s_addr = (anon_ip_src.s_addr ^ xor_key) & 0xFFFFFF00 | 0x0000000A; // --> 10.x.x.x
+        anon_ip_src.s_addr = ((anon_ip_src.s_addr ^ xor_key) & 0xFFFFFF00) | 0x0000000A; // --> 10.x.x.x
         sprintf(anon_pkt_src,"%s:%d",inet_ntoa(anon_ip_src),ntohs(tcp->th_sport));
         get_key(anon_key,anon_pkt_src,pkt_dst);
     }
@@ -1260,7 +1259,6 @@ int get_resp_hdr_length(const char *payload, int payload_size) {
     char haystack[search_limit+1];
     const char needle[] = "\r\n\r\n";
     char *p = NULL;
-    int i;
 
     strncpy(haystack, payload, search_limit);
     haystack[search_limit]='\0'; // just to be safe...
@@ -1389,8 +1387,8 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
 
     seq_list_entry_t *e;
     u_int seq_num, psize, m;
-    u_int expected_seq_num, max_seq_num, init_seq_num;
-    short gap_detected, terminate_loop;
+    u_int max_seq_num, init_seq_num;
+    short gap_detected;
     int estimated_flow_payload_len;
 
 
@@ -1579,7 +1577,7 @@ void *dump_pe_thread(void* d) {
     struct mz_payload_thread *tdata = (struct mz_payload_thread*) d;
 
     if(tdata == NULL || tdata->pe_payload == NULL)
-        return;
+        pthread_exit(NULL);
 
     #ifdef PE_DEBUG
     if(debug_level >= VERY_VERY_VERBOSE) {
