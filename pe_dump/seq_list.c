@@ -65,7 +65,7 @@ void seq_list_destroy(seq_list_t* l, int mz_found) {
     }
 }
 
-void seq_list_insert(seq_list_t *l, u_int i, u_int j) {
+void seq_list_insert(seq_list_t *l, u_int sn, u_int ps) {
 
     if(l == NULL)
         return;
@@ -79,8 +79,8 @@ void seq_list_insert(seq_list_t *l, u_int i, u_int j) {
 
     // initialize the new element
     memset(e,0,sizeof(seq_list_entry_t));
-    e->i = i;
-    e->j = j;
+    e->sn = sn;
+    e->ps = ps;
     e->next = NULL;
     
     if(l->head == NULL) {
@@ -154,7 +154,7 @@ u_int seq_list_get_seq_num(seq_list_entry_t *e) {
 
     if(e == NULL)
         return 0;
-    return e->i;
+    return e->sn;
 }
 
 
@@ -162,7 +162,7 @@ u_int seq_list_get_payload_size(seq_list_entry_t *e) {
 
     if(e == NULL)
         return 0;
-    return e->j;
+    return e->ps;
 }
 
 
@@ -173,7 +173,7 @@ void seq_list_print(seq_list_t *l) {
 
     seq_list_entry_t *e = l->head;
     while(e != NULL) {
-        printf("(%u,%u) ", e->i, e->j);
+        printf("(%u,%u) ", e->sn, e->ps);
         e = e->next;
     }
     printf("\n");

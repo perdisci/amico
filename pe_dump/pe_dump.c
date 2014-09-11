@@ -788,7 +788,7 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
             #endif
 
             // record the last PE byte expected from the server (from client's ack)
-            seq_list_insert(tflow->sc_seq_list, ntohl(tcp->th_ack)-1, 0);
+            seq_list_insert(tflow->sc_seq_list, ntohl(tcp->th_ack), 0);
 
             // dump reconstructed PE file
             dump_pe(tflow);
@@ -1460,10 +1460,11 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
 
 
     seq_list_entry_t *s, *s_gap;
+    s = NULL; // we need to initialize s, otherwise we risk to use an uninitialized pointer later...
+    s_gap = NULL; // we need to initialize s_gap, otherwise we risk to use an uninitialized pointer later...
 
     seq_list_restart_from_head(l); // makes sure we start from the head of the list
-    s = seq_list_next(l); // initialize s to point to the first element in the list
-    s_gap = s; // we need to initialize s_gap as well, otherwise we risk to use an uninitialized pointer later...
+    s = seq_list_next(l); // set s to point to the first element in the list
     if(s == NULL) // This should never happen; if it does, something is very wrong!
         return TRUE;
 
@@ -1537,7 +1538,9 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
             break; 
         }
 
-        if(gap_detected) { // we re-explore the list to see if we can fill the gap
+        // if we did make progress in filling the gaps in the previous loop
+        // but a gap still remains, we re-explore the list to see if we can fill it
+        if(gap_detected) {
             printf("Starting another outer loop\n");
             fflush(stdout);
             // start another loop to see if we can fill the gaps

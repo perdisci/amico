@@ -29,10 +29,8 @@ typedef unsigned int u_int;
 
 typedef struct seq_list_entry {
 
-    // TODO: the following fields, i and j, should really be renamed!
-
-    u_int i; // sequence number
-    u_int j; // payload size 
+    u_int sn; // sequence number
+    u_int ps; // payload size 
     struct seq_list_entry *next;
 
 } seq_list_entry_t;
