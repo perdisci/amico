@@ -20,7 +20,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_LRUC_TTL 10*60 // 10 minutes
+#define MAX_LRUC_TTL 5*60 // 5 minutes
 
 typedef unsigned int u_int;
 

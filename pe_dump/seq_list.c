@@ -141,6 +141,31 @@ void seq_list_restart_from_head(seq_list_t *l) {
 
 }
 
+void seq_list_restart_from_element(seq_list_t *l, seq_list_entry_t *e) {
+
+    if(l == NULL)
+        return;
+
+    l->next = e;
+
+}
+
+u_int seq_list_get_seq_num(seq_list_entry_t *e) {
+
+    if(e == NULL)
+        return 0;
+    return e->i;
+}
+
+
+u_int seq_list_get_payload_size(seq_list_entry_t *e) {
+
+    if(e == NULL)
+        return 0;
+    return e->j;
+}
+
+
 void seq_list_print(seq_list_t *l) {
 
     if(l == NULL)

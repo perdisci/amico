@@ -1427,11 +1427,11 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
     if(e == NULL) // This should never happen; if it does, something is very wrong!
         return TRUE;
 
-    init_seq_num = e->i;
+    init_seq_num = seq_list_get_seq_num(e);
     max_seq_num = 0;
     while(e != NULL) {
-        seq_num = e->i;
-        psize = e->j;
+        seq_num = seq_list_get_seq_num(e);
+        psize = seq_list_get_payload_size(e);
         m = seq_num+psize;
         if(m > max_seq_num) {
             max_seq_num = m;
@@ -1462,11 +1462,12 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
     seq_list_entry_t *s, *s_gap;
 
     seq_list_restart_from_head(l); // makes sure we start from the head of the list
-    s = seq_list_next(l);
+    s = seq_list_next(l); // initialize s to point to the first element in the list
+    s_gap = s; // we need to initialize s_gap as well, otherwise we risk to use an uninitialized pointer later...
     if(s == NULL) // This should never happen; if it does, something is very wrong!
         return TRUE;
 
-    u_int next_seq_num = s->i;
+    u_int next_seq_num = seq_list_get_seq_num(s);
     u_int old_next_seq_num = next_seq_num;
     u_int payload_size = 0;
 
@@ -1487,12 +1488,12 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
         while(s != NULL) { // at every itration, finds the lagest "contiguous" next_seq_num
             printf("seq_num\n");
             fflush(stdout);
-            seq_num = s->i;
+            seq_num = seq_list_get_seq_num(s);
             printf("seq_num = %u\n", seq_num);
             fflush(stdout);
             printf("payload_size\n");
             fflush(stdout);
-            payload_size = s->j;
+            payload_size = seq_list_get_payload_size(s);
             printf("payload_size = %u\n", payload_size);
             fflush(stdout);
 
@@ -1516,7 +1517,9 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
 
             printf("Finished one loop\n");
             fflush(stdout);
-            s = s->next;
+            s = seq_list_next(l);
+            printf("Going to next...\n");
+            fflush(stdout);
         }
 
         if(next_seq_num <= old_next_seq_num) { // no progress in this cycle, we should stop here
@@ -1534,10 +1537,19 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
             break; 
         }
 
-        // start another loop to see if we can fill the gaps
-        s = s_gap; // we restart exploring the list of sequence numbers from the gap
-        old_next_seq_num = next_seq_num;
-        gap_detected = FALSE;
+        if(gap_detected) { // we re-explore the list to see if we can fill the gap
+            printf("Starting another outer loop\n");
+            fflush(stdout);
+            // start another loop to see if we can fill the gaps
+            seq_list_restart_from_element(l,s_gap); // we restart exploring the list of sequence numbers from the gap
+            printf("finished seq_list_restart_from_element\n");
+            fflush(stdout);
+            s = seq_list_next(l);
+            old_next_seq_num = next_seq_num;
+            gap_detected = FALSE;
+            printf("OK, restat!\n");
+            fflush(stdout);
+        }
     }
 
     printf("Finished loop!\n");
