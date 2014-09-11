@@ -36,10 +36,13 @@ seq_list_t *seq_list_init(void) {
 
 void seq_list_destroy(seq_list_t* l, int mz_found) {
 
+    /* DEBUG 
     if(mz_found) {
         printf("Calling seq_list_destroy!!!\n");
         fflush(stdout);
     }
+    */
+
 
     if(l == NULL)
         return;
@@ -59,10 +62,13 @@ void seq_list_destroy(seq_list_t* l, int mz_found) {
     
     free(l);
 
+
+    /* DEBUG
     if(mz_found) {
         printf("Destroyed seq_list!!!\n");
         fflush(stdout);
     }
+    */
 }
 
 void seq_list_insert(seq_list_t *l, u_int sn, u_int ps) {

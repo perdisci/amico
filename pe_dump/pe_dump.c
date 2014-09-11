@@ -153,9 +153,12 @@ struct tcp_header {
 #define LRUC_SIZE 10000 // Max number of TCP flows tracked for reconstruction at any given time
 
 #define CORRUPT_MISSING_DATA 1
-#define CORRUPT_INVALID_RESPONSE_LEN 2
-#define POSSIBLY_CORRUPT_FLOW_ID_COLLISION 3
-#define POSSIBLY_CORRUPT_FLOW_UNEXPECTEDLY_DESTROYED 4
+#define CORRUPT_MISSING_DATA_INVALID_SEQ_LIST  2
+#define CORRUPT_MISSING_DATA_EST_LEN_TOO_SHORT 3
+#define CORRUPT_MISSING_DATA_EST_LEN_TOO_LONG  4
+#define CORRUPT_INVALID_RESPONSE_LEN 5
+#define POSSIBLY_CORRUPT_FLOW_ID_COLLISION 6
+#define POSSIBLY_CORRUPT_FLOW_UNEXPECTEDLY_DESTROYED 7
 /////////////////////////
 
 
@@ -1414,9 +1417,9 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
 
     // check if this is a non-empy seq_list
     if(l == NULL)
-        return TRUE;
+        return CORRUPT_MISSING_DATA_INVALID_SEQ_LIST;
     if(seq_list_head(l) == NULL)
-        return TRUE;
+        return CORRUPT_MISSING_DATA_INVALID_SEQ_LIST;
 
     // get the max sequence number in the list
     // notice that the list is not ordered; packet (seq_num, psize) pairs are stored in order of arrival
@@ -1425,7 +1428,7 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
     seq_list_restart_from_head(l); // makes sure we start from the head of the list
     e = seq_list_next(l);
     if(e == NULL) // This should never happen; if it does, something is very wrong!
-        return TRUE;
+        return CORRUPT_MISSING_DATA_INVALID_SEQ_LIST;
 
     init_seq_num = seq_list_get_seq_num(e);
     max_seq_num = 0;
@@ -1453,9 +1456,9 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
     #endif
 
     if(estimated_flow_payload_len < flow_payload_len) // if true, it means we are missing some bytes
-        return TRUE;
+        return CORRUPT_MISSING_DATA_EST_LEN_TOO_SHORT; 
     if(estimated_flow_payload_len > flow_payload_len) // this should be impossible, something went really wrong!
-        return TRUE; // not really missing data; signals a problem in the file reconstruction from which we cannot recover
+        return CORRUPT_MISSING_DATA_EST_LEN_TOO_LONG; // not really missing data; signals a problem in the file reconstruction from which we cannot recover
         // TODO: maybe we should return an error code here, rather than TRUE/FALSE
 
 
@@ -1466,7 +1469,7 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
     seq_list_restart_from_head(l); // makes sure we start from the head of the list
     s = seq_list_next(l); // set s to point to the first element in the list
     if(s == NULL) // This should never happen; if it does, something is very wrong!
-        return TRUE;
+        return CORRUPT_MISSING_DATA_INVALID_SEQ_LIST;
 
     u_int next_seq_num = seq_list_get_seq_num(s);
     u_int old_next_seq_num = next_seq_num;
@@ -1483,32 +1486,17 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
         }
         #endif
 
-        printf("Inside loop!\n");
-        fflush(stdout);
-
         while(s != NULL) { // at every itration, finds the lagest "contiguous" next_seq_num
-            printf("seq_num\n");
-            fflush(stdout);
             seq_num = seq_list_get_seq_num(s);
-            printf("seq_num = %u\n", seq_num);
-            fflush(stdout);
-            printf("payload_size\n");
-            fflush(stdout);
             payload_size = seq_list_get_payload_size(s);
-            printf("payload_size = %u\n", payload_size);
-            fflush(stdout);
 
             if(payload_size > 0) { // skeep empty packets
                 if(seq_num <= next_seq_num && seq_num+payload_size > next_seq_num) { // NO GAP (YET)
-                    // printf("++ S1 = %u\n", seq_num);
-                    // printf("++ Next Seq = %u\n", next_seq_num);
                     next_seq_num = seq_num+payload_size;
-                    // printf("++ New Next Seq = %u\n", next_seq_num);
                 }
                 else if(!gap_detected && seq_num > next_seq_num) {
                     gap_detected = TRUE;   
                     s_gap = s; // we will restart another loop from this list element, to save time
-                    // printf("++ GAP - Seq = %u\n", seq_num);
                 }
             }
             else break; // only the last (seq_num,payload_size) pair is supposed to have payload_size = 0;
@@ -1516,11 +1504,7 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
             if(s == seq_list_tail(l)) // we reached the end of the seq_num list...
                 break;
 
-            printf("Finished one loop\n");
-            fflush(stdout);
             s = seq_list_next(l);
-            printf("Going to next...\n");
-            fflush(stdout);
         }
 
         if(next_seq_num <= old_next_seq_num) { // no progress in this cycle, we should stop here
@@ -1541,22 +1525,13 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
         // if we did make progress in filling the gaps in the previous loop
         // but a gap still remains, we re-explore the list to see if we can fill it
         if(gap_detected) {
-            printf("Starting another outer loop\n");
-            fflush(stdout);
             // start another loop to see if we can fill the gaps
             seq_list_restart_from_element(l,s_gap); // we restart exploring the list of sequence numbers from the gap
-            printf("finished seq_list_restart_from_element\n");
-            fflush(stdout);
             s = seq_list_next(l);
             old_next_seq_num = next_seq_num;
             gap_detected = FALSE;
-            printf("OK, restat!\n");
-            fflush(stdout);
         }
     }
-
-    printf("Finished loop!\n");
-    fflush(stdout);
 
     // if gap_detected remains TRUE after scanning the sequence numbers list (possibly) muliple times
     // then it means that we are really missing data
@@ -1566,7 +1541,7 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
 	        printf("DETECTED MISSING DATA\n");
         #endif
 
-        return TRUE;
+        return CORRUPT_MISSING_DATA;
     }
 
     #ifdef PE_DEBUG
@@ -1700,32 +1675,41 @@ void *dump_pe_thread(void* d) {
     }
     #endif
 
-    if(contentlen <= 0 || httphdrlen <= 0) // this should never happen, but we check anyway
+    if(contentlen <= 0 || httphdrlen <= 0) { // this should never happen, but we check anyway
         tdata->corrupt_pe = CORRUPT_INVALID_RESPONSE_LEN; 
+        printf("CORRUPT_INVALID_RESPONSE_LEN (contentlen <= 0 || httphdrlen <= 0)\n");
+        fflush(stdout);
+    }
 
-    if(flow_payload_len > tdata->pe_payload_size) // if true, we are clearly missing data
-	    tdata->corrupt_pe = CORRUPT_MISSING_DATA;
+    if(flow_payload_len > tdata->pe_payload_size) { // if true, we are clearly missing data
+	    tdata->corrupt_pe = CORRUPT_INVALID_RESPONSE_LEN;
+        printf("CORRUPT_INVALID_RESPONSE_LEN (flow_payload_len > tdata->pe_payload_size)\n");
+        fflush(stdout);
+    }
+
+    // check if there is any gap in the list of TCP sequence numbers
+    // also check if total size of reconstructed payloads matches the expected HTTP Content Lenght
+    short missing_data = FALSE;
+    if(tdata->corrupt_pe != CORRUPT_INVALID_RESPONSE_LEN) {
+        is_missing_flow_data(tdata->sc_seq_list, flow_payload_len);
+        printf("IS_MISSING_FLOW_DATA returned %d\n", missing_data);
+        fflush(stdout);
+        if(missing_data)
+            tdata->corrupt_pe = CORRUPT_MISSING_DATA;
+    }
+
 
     #ifdef PE_DEBUG    
     if(debug_level >= VERY_VERY_VERBOSE) {
         if(tdata->corrupt_pe)
-    	    printf("IS CORRUPT\n");
+            printf("IS CORRUPT\n");
         else
-    	    printf("NOT CORRUPT\n");
+            printf("NOT CORRUPT\n");
     }
 
     printf("\n===\n");
+    fflush(stdout);
     #endif
-
-    // check if there is any gap in the list of TCP sequence numbers
-    // also check if total size of reconstructed payloads matches the expected HTTP Content Lenght
-    printf("Calling IS_MISSING_FLOW_DATA\n");
-    fflush(stdout);
-    short missing_data = is_missing_flow_data(tdata->sc_seq_list, flow_payload_len);
-    printf("IS_MISSING_FLOW_DATA returned %d\n", missing_data);
-    fflush(stdout);
-    if(missing_data)
-        tdata->corrupt_pe = CORRUPT_MISSING_DATA;
 
 
     #define CORRUPT_PE_ALERT "CORRUPT_PE"
