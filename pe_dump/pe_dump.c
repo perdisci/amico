@@ -225,6 +225,7 @@ lru_cache_t *lruc;
 
 static void stop_pcap(int);
 static void print_stats(int);
+static void clean_and_print_lruc_stats(int);
 void print_usage(char* cmd);
 void packet_received(char *args, const struct pcap_pkthdr *header, const u_char *packet);
 struct tcp_flow* init_flow(const struct ip_header  *ip, const struct tcp_header *tcp, const char *key, const char *rev_key, const char *anon_key);
@@ -358,6 +359,7 @@ int main(int argc, char **argv) {
     signal(SIGTERM, stop_pcap);
     signal(SIGINT,  stop_pcap);
     signal(SIGUSR1, print_stats);
+    signal(SIGUSR2, clean_and_print_lruc_stats);
 
 
     // Make sure we know where to store the reconstructed files
@@ -786,7 +788,7 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
             #endif
 
             // record the last PE byte expected from the server (from client's ack)
-            seq_list_insert(tflow->sc_seq_list, ntohl(tcp->th_ack), 0);
+            seq_list_insert(tflow->sc_seq_list, ntohl(tcp->th_ack)-1, 0);
 
             // dump reconstructed PE file
             dump_pe(tflow);
@@ -1040,15 +1042,15 @@ void tflow_destroy(void *v) {
     }
     #endif
 
-    if(tflow->sc_payload != NULL) {
-        if(tflow->flow_state == FLOW_HTTP_RESP_MZ_FOUND) {
-            // record the fact that flow is being unexpectedly terminated, PE most likely corrupt
-            tflow->corrupt_pe = POSSIBLY_CORRUPT_FLOW_UNEXPECTEDLY_DESTROYED;
+    if(tflow->sc_payload != NULL && tflow->flow_state == FLOW_HTTP_RESP_MZ_FOUND) {
+        // record the fact that flow is being unexpectedly terminated, PE most likely corrupt
+        tflow->corrupt_pe = POSSIBLY_CORRUPT_FLOW_UNEXPECTEDLY_DESTROYED;
 
-            // dump reconstructed PE file
-            dump_pe(tflow);
-        }
+        // dump reconstructed PE file
+        dump_pe(tflow);
+    }
 
+    if(tflow->sc_payload!= NULL) { // we need to check again, because dump_pe might have changed things...
         free(tflow->sc_payload);
         tflow->sc_payload = NULL;
 
@@ -1061,8 +1063,8 @@ void tflow_destroy(void *v) {
     }
 
     if(tflow->sc_seq_list != NULL) {
-        seq_list_destroy(tflow->sc_seq_list);
-        free(tflow->sc_seq_list);
+        int mz_true = (tflow->flow_state == FLOW_HTTP_RESP_MZ_FOUND);
+        seq_list_destroy(tflow->sc_seq_list, mz_true);
         tflow->sc_seq_list = NULL;
 
         #ifdef PE_DEBUG
@@ -1088,12 +1090,30 @@ static void stop_pcap(int signo) {
 
     // properly destroy LRU cache fist 
     lruc_destroy(lruc);
+    lruc = NULL;
 
     fprintf(stderr, "\nCaught Signal #%d\n", signo);
     print_stats(signo);
+    clean_and_print_lruc_stats(signo);
     pthread_exit(NULL);
 
 }
+
+
+static void clean_and_print_lruc_stats(int signo) {
+
+    fprintf(stderr, "----------------------------------\n");
+    if(lruc!=NULL) {
+        fprintf(stderr, "LRU cache size (before celaning) = %d \n", lruc->num_entries);
+        clean_lruc(lruc);
+        fprintf(stderr, "LRU cache size (after cleaning) = %d \n", lruc->num_entries);
+    }
+    else {
+        fprintf(stderr, "No LRU cache!\n");
+    }
+    fprintf(stderr, "----------------------------------\n");
+
+}    
 
 
 static void print_stats(int signo) {
@@ -1439,9 +1459,9 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
         // TODO: maybe we should return an error code here, rather than TRUE/FALSE
 
 
-    seq_list_restart_from_head(l); // makes sure we start from the head of the list
     seq_list_entry_t *s, *s_gap;
 
+    seq_list_restart_from_head(l); // makes sure we start from the head of the list
     s = seq_list_next(l);
     if(s == NULL) // This should never happen; if it does, something is very wrong!
         return TRUE;
@@ -1461,9 +1481,20 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
         }
         #endif
 
+        printf("Inside loop!\n");
+        fflush(stdout);
+
         while(s != NULL) { // at every itration, finds the lagest "contiguous" next_seq_num
+            printf("seq_num\n");
+            fflush(stdout);
             seq_num = s->i;
+            printf("seq_num = %u\n", seq_num);
+            fflush(stdout);
+            printf("payload_size\n");
+            fflush(stdout);
             payload_size = s->j;
+            printf("payload_size = %u\n", payload_size);
+            fflush(stdout);
 
             if(payload_size > 0) { // skeep empty packets
                 if(seq_num <= next_seq_num && seq_num+payload_size > next_seq_num) { // NO GAP (YET)
@@ -1478,6 +1509,13 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
                     // printf("++ GAP - Seq = %u\n", seq_num);
                 }
             }
+            else break; // only the last (seq_num,payload_size) pair is supposed to have payload_size = 0;
+
+            if(s == seq_list_tail(l)) // we reached the end of the seq_num list...
+                break;
+
+            printf("Finished one loop\n");
+            fflush(stdout);
             s = s->next;
         }
 
@@ -1502,6 +1540,8 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
         gap_detected = FALSE;
     }
 
+    printf("Finished loop!\n");
+    fflush(stdout);
 
     // if gap_detected remains TRUE after scanning the sequence numbers list (possibly) muliple times
     // then it means that we are really missing data
@@ -1553,7 +1593,6 @@ void dump_pe(struct tcp_flow *tflow) {
     tdata->pe_payload_size = tflow->sc_payload_size;
     tdata->corrupt_pe = tflow->corrupt_pe;
     tdata->sc_seq_list = tflow->sc_seq_list;
-    tflow->sc_seq_list = NULL; // prevents a possible double free
 
     #ifdef PE_DEBUG
     if(debug_level >= VERY_VERY_VERBOSE) {
@@ -1563,6 +1602,8 @@ void dump_pe(struct tcp_flow *tflow) {
     #endif
     
     tflow->sc_payload = NULL; // avoids buffer to be freed by main thread
+    tflow->sc_seq_list = NULL; // prevents a possible double free
+
     pthread_create(&thread_id,NULL,dump_pe_thread,(void*)tdata);
     pthread_detach(thread_id); // this allows for the thread data structures to be reclaimed as soon as thread ends
 
@@ -1663,7 +1704,11 @@ void *dump_pe_thread(void* d) {
 
     // check if there is any gap in the list of TCP sequence numbers
     // also check if total size of reconstructed payloads matches the expected HTTP Content Lenght
+    printf("Calling IS_MISSING_FLOW_DATA\n");
+    fflush(stdout);
     short missing_data = is_missing_flow_data(tdata->sc_seq_list, flow_payload_len);
+    printf("IS_MISSING_FLOW_DATA returned %d\n", missing_data);
+    fflush(stdout);
     if(missing_data)
         tdata->corrupt_pe = CORRUPT_MISSING_DATA;
 
@@ -1709,8 +1754,8 @@ void *dump_pe_thread(void* d) {
 
     // free the memory
     free(tdata->pe_payload);
-    seq_list_destroy(tdata->sc_seq_list);
-    free(tdata->sc_seq_list);
+    seq_list_destroy(tdata->sc_seq_list, TRUE);
+    tdata->sc_seq_list = NULL;
     free(tdata);
 
     #ifdef PE_DEBUG    
@@ -1948,10 +1993,9 @@ void reset_flow_payload(struct tcp_flow *tflow) {
     tflow->sc_payload = NULL;
 
     if(tflow->sc_seq_list != NULL) {
-        seq_list_destroy(tflow->sc_seq_list);
-        free(tflow->sc_seq_list);
+        seq_list_destroy(tflow->sc_seq_list, FALSE);
+        tflow->sc_seq_list = NULL;
     }
-    tflow->sc_seq_list = NULL;
 }
 
 

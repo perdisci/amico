@@ -46,7 +46,7 @@ typedef struct seq_list {
 } seq_list_t;
 
 seq_list_t* seq_list_init(void);
-void seq_list_destroy(seq_list_t* l);
+void seq_list_destroy(seq_list_t* l, int mz_found);
 void seq_list_insert(seq_list_t *l, u_int i, u_int j);
 seq_list_entry_t *seq_list_head(seq_list_t *l);
 seq_list_entry_t *seq_list_tail(seq_list_t *l);

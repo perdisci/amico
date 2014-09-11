@@ -20,6 +20,13 @@
 seq_list_t *seq_list_init(void) {
 
     seq_list_t *l = (seq_list_t*)malloc(sizeof(seq_list_t));
+    if(l == NULL) {
+        printf("Failed to initialize seq_list! Out of memory???\n");
+        fflush(stdout);
+        exit(1);
+    }
+
+    memset(l,0,sizeof(seq_list_t));
     l->head = NULL;
     l->tail = NULL;
     l->next = NULL;
@@ -27,7 +34,12 @@ seq_list_t *seq_list_init(void) {
     return l;
 }
 
-void seq_list_destroy(seq_list_t* l) {
+void seq_list_destroy(seq_list_t* l, int mz_found) {
+
+    if(mz_found) {
+        printf("Calling seq_list_destroy!!!\n");
+        fflush(stdout);
+    }
 
     if(l == NULL)
         return;
@@ -41,11 +53,32 @@ void seq_list_destroy(seq_list_t* l) {
         h = n;
     }
 
+    l->head = NULL;
+    l->tail = NULL;
+    l->next = NULL;
+    
+    free(l);
+
+    if(mz_found) {
+        printf("Destroyed seq_list!!!\n");
+        fflush(stdout);
+    }
 }
 
 void seq_list_insert(seq_list_t *l, u_int i, u_int j) {
 
+    if(l == NULL)
+        return;
+
     seq_list_entry_t *e = (seq_list_entry_t*)malloc(sizeof(seq_list_entry_t));
+    if(e == NULL) {
+        printf("Error allocating memory for insering element in seq_list; Out of memory???\n");
+        fflush(stdout);
+        exit(1);
+    }
+
+    // initialize the new element
+    memset(e,0,sizeof(seq_list_entry_t));
     e->i = i;
     e->j = j;
     e->next = NULL;
@@ -58,6 +91,11 @@ void seq_list_insert(seq_list_t *l, u_int i, u_int j) {
         return;
     }
 
+    if(l->tail == NULL) {
+        printf("Error: list tail cannot be null here!\n");
+        fflush(stdout);
+        exit(1);
+    }
     l->tail->next = e;
     l->tail = e;
     
@@ -65,15 +103,24 @@ void seq_list_insert(seq_list_t *l, u_int i, u_int j) {
 
 seq_list_entry_t *seq_list_head(seq_list_t *l) {
 
+    if(l == NULL)
+        return NULL;
+
     return l->head;
 }
 
 seq_list_entry_t *seq_list_tail(seq_list_t *l) {
 
+    if(l == NULL)
+        return NULL;
+
     return l->tail;
 }
 
 seq_list_entry_t *seq_list_next(seq_list_t *l) {
+
+    if(l == NULL)
+        return NULL;
 
     if(l->next == NULL)
         return NULL;
@@ -87,11 +134,17 @@ seq_list_entry_t *seq_list_next(seq_list_t *l) {
 
 void seq_list_restart_from_head(seq_list_t *l) {
 
+    if(l == NULL)
+        return;
+
     l->next = l->head;
 
 }
 
 void seq_list_print(seq_list_t *l) {
+
+    if(l == NULL)
+        return;
 
     seq_list_entry_t *e = l->head;
     while(e != NULL) {

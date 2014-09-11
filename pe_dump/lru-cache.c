@@ -21,6 +21,7 @@
 
 // #define LRUC_DEBUG
 #define HT_SIZE_FACTOR 10
+#define LRUC_MIN_ENTRIES 10
 
 /* Initializes the Hash Table */
 hash_table_t* ht_init(u_int length) {
@@ -61,6 +62,8 @@ void ht_destroy(hash_table_t* ht) {
     }
    
     free(ht->vect);
+    ht->vect = NULL;
+
     free(ht); 
 
 }
@@ -88,7 +91,9 @@ lru_cache_t* lruc_init(u_int max_entries, void (*destroy_val_fn)(void*)) {
     else
         lruc->destroy_val_fn = default_destroy_val_fn;
     lruc->num_entries = 0;
-    lruc->max_entries = max_entries;
+    lruc->max_entries = LRUC_MIN_ENTRIES; // we should force at least these many entries
+    if(max_entries > LRUC_MIN_ENTRIES)
+        lruc->max_entries = max_entries;
 
     return lruc;
 }
@@ -116,12 +121,16 @@ void lruc_destroy(lru_cache_t *lruc) {
         lruc_entry_t *t = lruc->top;
         lruc->top = lruc->top->next; 
         free(t->key);
-        if(t->value != NULL)
+        if(t->value != NULL) {
             lruc->destroy_val_fn(t->value);
+            t->value = NULL;
+        }
         free(t);
     }
 
     ht_destroy(lruc->ht);
+    lruc->ht = NULL;
+
     free(lruc);
 
 }
@@ -203,6 +212,9 @@ int lruc_insert(lru_cache_t *lruc, const char *key, void* value) {
         lruc->top->prev = e;
     }
     else {
+        // printf("LRUC is full!\n");
+        // fflush(stdout);
+
         e->next = lruc->top;
         e->prev = lruc->top->prev->prev;
         lruc->top->prev->prev->next = e;
@@ -217,6 +229,9 @@ int lruc_insert(lru_cache_t *lruc, const char *key, void* value) {
         free(tmp);
 
         lruc->num_entries--;
+
+        // printf("Removed LRU element; inserted the new one!\n");
+        // fflush(stdout);
     }
 
     lruc->top = e;
@@ -453,8 +468,13 @@ void clean_lruc(lru_cache_t *lruc) {
         lruc_entry_t *e = lruc->top->prev;
         // printf("e Time = %u\n", e->time);
 
-        if((t - e->time) > MAX_LRUC_TTL)
+        if((t - e->time) > MAX_LRUC_TTL) {
+            if(lruc->destroy_val_fn != NULL) {
+                lruc->destroy_val_fn(e->value);
+                e->value = NULL;
+            }
             lruc_delete(lruc, e->key);
+        }
         else
             break;
 
