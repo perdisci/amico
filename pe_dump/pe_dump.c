@@ -1480,8 +1480,8 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
 
         #ifdef PE_DEBUG
         if(debug_level >= VERY_VERY_VERBOSE) {
-            printf("S1 = %u\n", seq_num);
             printf("Next Seq = %u\n", next_seq_num);
+            printf("Max Seq = %u\n", max_seq_num);
             fflush(stdout);
         }
         #endif
@@ -1528,9 +1528,10 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
             // start another loop to see if we can fill the gaps
             seq_list_restart_from_element(l,s_gap); // we restart exploring the list of sequence numbers from the gap
             s = seq_list_next(l);
-            old_next_seq_num = next_seq_num;
             gap_detected = FALSE;
         }
+
+        old_next_seq_num = next_seq_num;
     }
 
     // if gap_detected remains TRUE after scanning the sequence numbers list (possibly) muliple times
@@ -1683,7 +1684,7 @@ void *dump_pe_thread(void* d) {
 
     if(flow_payload_len > tdata->pe_payload_size) { // if true, we are clearly missing data
 	    tdata->corrupt_pe = CORRUPT_INVALID_RESPONSE_LEN;
-        printf("CORRUPT_INVALID_RESPONSE_LEN (flow_payload_len > tdata->pe_payload_size)\n");
+        printf("CORRUPT_INVALID_RESPONSE_LEN (flow_payload_len = %d > tdata->pe_payload_size = %d)\n", flow_payload_len, tdata->pe_payload_size);
         fflush(stdout);
     }
 
