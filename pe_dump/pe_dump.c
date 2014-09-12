@@ -158,9 +158,10 @@ struct tcp_header {
 #define CORRUPT_MISSING_DATA_INVALID_SEQ_LIST  2
 #define CORRUPT_MISSING_DATA_EST_LEN_TOO_SHORT 3
 #define CORRUPT_MISSING_DATA_EST_LEN_TOO_LONG  4
-#define CORRUPT_INVALID_RESPONSE_LEN 5
-#define POSSIBLY_CORRUPT_FLOW_ID_COLLISION 6
-#define POSSIBLY_CORRUPT_FLOW_UNEXPECTEDLY_DESTROYED 7
+#define CORRUPT_MISSING_DATA_TRIGGERED_KILL_SWITCH 5
+#define CORRUPT_INVALID_RESPONSE_LEN 6
+#define POSSIBLY_CORRUPT_FLOW_ID_COLLISION 7
+#define POSSIBLY_CORRUPT_FLOW_UNEXPECTEDLY_DESTROYED 8
 /////////////////////////
 
 
@@ -1489,9 +1490,7 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
         if(loop_count >= MAX_LOOPS_KILL_SWITCH) {
             printf("MAX_LOOPS_KILL_SWITCH!\n");
             fflush(stdout);
-            gap_detected = TRUE;
-            // return gap_detected;
-            break;
+            return CORRUPT_MISSING_DATA_TRIGGERED_KILL_SWITCH;
         }
         /////////////////////////////////////////
         
@@ -1515,9 +1514,7 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
             if(loop_count >= MAX_LOOPS_KILL_SWITCH) {
                 printf("MAX_LOOPS_KILL_SWITCH!\n");
                 fflush(stdout);
-                gap_detected = TRUE;
-                // return gap_detected;
-                break;
+                return CORRUPT_MISSING_DATA_TRIGGERED_KILL_SWITCH;
             }
             /////////////////////////////////////////
 
