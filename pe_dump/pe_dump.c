@@ -1477,8 +1477,23 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
     u_int old_next_seq_num = next_seq_num;
     u_int payload_size = 0;
 
+
+    #define MAX_LOOPS_KILL_SWITCH 100000 // safety guard to avoid infinite loops in case of an undetected bug in the gap finding algorithm 
+    u_int loop_count = 0;
+
     gap_detected = TRUE;
     while(s != NULL && next_seq_num < max_seq_num && gap_detected)  {
+
+        // safety guard to avoid infinite loops in case of an undetected bug in the gap finding algorithm
+        loop_count++;
+        if(loop_count >= MAX_LOOPS_KILL_SWITCH) {
+            printf("MAX_LOOPS_KILL_SWITCH!\n");
+            fflush(stdout);
+            gap_detected = TRUE;
+            // return gap_detected;
+            break;
+        }
+        /////////////////////////////////////////
         
         // prepare for next iteration
         gap_detected = FALSE;
@@ -1494,6 +1509,18 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
         #endif
 
         while(s != NULL) { // at every itration, finds the lagest "contiguous" next_seq_num
+
+            // safety guard to avoid infinite loops in case of an undetected bug in the gap finding algorithm
+            loop_count++;
+            if(loop_count >= MAX_LOOPS_KILL_SWITCH) {
+                printf("MAX_LOOPS_KILL_SWITCH!\n");
+                fflush(stdout);
+                gap_detected = TRUE;
+                // return gap_detected;
+                break;
+            }
+            /////////////////////////////////////////
+
             seq_num = seq_list_get_seq_num(s);
             payload_size = seq_list_get_payload_size(s);
 
@@ -1702,7 +1729,7 @@ void *dump_pe_thread(void* d) {
     // also check if total size of reconstructed payloads matches the expected HTTP Content Lenght
     short missing_data = FALSE;
     if(tdata->corrupt_pe != CORRUPT_INVALID_RESPONSE_LEN) {
-        is_missing_flow_data(tdata->sc_seq_list, flow_payload_len);
+        missing_data = is_missing_flow_data(tdata->sc_seq_list, flow_payload_len);
         printf("IS_MISSING_FLOW_DATA returned %d\n", missing_data);
         fflush(stdout);
         if(missing_data)
