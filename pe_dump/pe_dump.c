@@ -139,6 +139,8 @@ struct tcp_header {
 #define MAX_DUMPDIR_LEN 256
 #define MAX_NIC_NAME_LEN 10 // larger than really needed
 #define TMP_SUFFIX_LEN 4
+#define MAX_PAYLOAD_LEN 1460
+#define MAX_HTTP_HDR_LEN 3*KB_SIZE
 #define MAX_SC_INIT_PAYLOADS 4
 #define INIT_SC_PAYLOAD 6*KB_SIZE // 6KB are enough to hold 4 TCP segments of 1460 payload bytes each; this should be plenty to allow us to determine if an HTTP response is carrying a file download of interest
 #define REALLOC_SC_PAYLOAD 128*KB_SIZE // 128KB increments are used when tracking a file download; notice that M_MMAP_THRESHOLD should be set to the same amount to allow for the blocks to be returned to the OS once the process frees them
@@ -1475,8 +1477,13 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
     u_int old_next_seq_num = next_seq_num;
     u_int payload_size = 0;
 
-    gap_detected = FALSE;
-    while(next_seq_num < max_seq_num) {
+    gap_detected = TRUE;
+    while(s != NULL && next_seq_num < max_seq_num && gap_detected)  {
+        
+        // prepare for next iteration
+        gap_detected = FALSE;
+        s_gap = NULL;
+        old_next_seq_num = next_seq_num;
 
         #ifdef PE_DEBUG
         if(debug_level >= VERY_VERY_VERBOSE) {
@@ -1490,24 +1497,26 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
             seq_num = seq_list_get_seq_num(s);
             payload_size = seq_list_get_payload_size(s);
 
-            if(payload_size > 0) { // skeep empty packets
-                if(seq_num <= next_seq_num && seq_num+payload_size > next_seq_num) { // NO GAP (YET)
-                    next_seq_num = seq_num+payload_size;
-                }
-                else if(!gap_detected && seq_num > next_seq_num) {
-                    gap_detected = TRUE;   
-                    s_gap = s; // we will restart another loop from this list element, to save time
-                }
+            if(seq_num <= next_seq_num && seq_num+payload_size > next_seq_num) { // NO GAP (YET)
+                next_seq_num = seq_num+payload_size;
             }
-            else break; // only the last (seq_num,payload_size) pair is supposed to have payload_size = 0;
+            else if(!gap_detected && seq_num > next_seq_num) {
+                #ifdef PE_DEBUG
+                if(debug_level >= VERY_VERY_VERBOSE) {
+                    printf("Seq Num = %u\n", seq_num);
+                    printf("Payload Size = %u\n", payload_size);
+                    fflush(stdout);
+                }
+                #endif
 
-            if(s == seq_list_tail(l)) // we reached the end of the seq_num list...
-                break;
+                gap_detected = TRUE;   
+                s_gap = s; // later we will restart another loop from this list element, to save time
+            }
 
             s = seq_list_next(l);
         }
 
-        if(next_seq_num <= old_next_seq_num) { // no progress in this cycle, we should stop here
+        if(next_seq_num <= old_next_seq_num || next_seq_num >= max_seq_num) { // no progress in this cycle, or we reached the end
 
             #ifdef PE_DEBUG
             if(debug_level >= VERY_VERY_VERBOSE) {    
@@ -1526,12 +1535,13 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len) {
         // but a gap still remains, we re-explore the list to see if we can fill it
         if(gap_detected) {
             // start another loop to see if we can fill the gaps
-            seq_list_restart_from_element(l,s_gap); // we restart exploring the list of sequence numbers from the gap
-            s = seq_list_next(l);
-            gap_detected = FALSE;
+            if(s_gap != NULL) {
+                seq_list_restart_from_element(l,s_gap); // we restart exploring the list of sequence numbers from the gap
+                s = seq_list_next(l);
+            }
+            else s = NULL;
         }
 
-        old_next_seq_num = next_seq_num;
     }
 
     // if gap_detected remains TRUE after scanning the sequence numbers list (possibly) muliple times
