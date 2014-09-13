@@ -1,5 +1,5 @@
-OBJ = pe_dump.o search.o lru-cache.o seq_list.o mac_strnlen.o 
-CFLAGS = -Wall -g
+OBJ = pe_dump.o search.o lru-cache.o seq_list.o
+CFLAGS = -Wall
 CC = gcc
 INCLUDE =
 LIB = -lpcap -lpthread
