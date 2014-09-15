@@ -272,10 +272,10 @@ int debug_level = QUIET;
 
 ///////////////////////////
 // Network traffic stats
-int stats_num_half_open_tcp_flows = 0;
-int stats_num_new_tcp_flows = 0;
-int stats_num_new_http_flows = 0;
-int stats_num_new_pe_flows = 0;
+u_int stats_num_half_open_tcp_flows = 0;
+u_int stats_num_new_tcp_flows = 0;
+u_int stats_num_new_http_flows = 0;
+u_int stats_num_new_pe_flows = 0;
 ///////////////////////////
 
 
@@ -1131,12 +1131,12 @@ static void print_stats(int signo) {
         return;
     }
     // fprintf(stderr, "%u packets captured \n", packets_captured);
-    fprintf(stderr, "%d packets received by filter \n", stat.ps_recv);
-    fprintf(stderr, "%d packets dropped by kernel\n", stat.ps_drop);
-    fprintf(stderr, "%d number of new half-open (SYN) tcp flows\n", stats_num_half_open_tcp_flows);
-    fprintf(stderr, "%d number of new (SYN ACK) tcp flows\n", stats_num_new_tcp_flows);
-    fprintf(stderr, "%d number of new http flows\n", stats_num_new_http_flows);
-    fprintf(stderr, "%d number of new PE flows\n", stats_num_new_pe_flows);
+    fprintf(stderr, "%u packets received by filter \n", stat.ps_recv);
+    fprintf(stderr, "%u packets dropped by kernel\n", stat.ps_drop);
+    fprintf(stderr, "%u number of new half-open (SYN) tcp flows\n", stats_num_half_open_tcp_flows);
+    fprintf(stderr, "%u number of new (SYN ACK) tcp flows\n", stats_num_new_tcp_flows);
+    fprintf(stderr, "%u number of new http flows\n", stats_num_new_http_flows);
+    fprintf(stderr, "%u number of new PE flows\n", stats_num_new_pe_flows);
 
     fprintf(stderr, "----------------------------------\n");
 }
