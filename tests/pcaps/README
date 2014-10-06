@@ -2,12 +2,18 @@
 Test pcaps:
 
 
-- test_pe_download_noncorrupt.pcap
+- test_pe_noncorrupt_complex_trace_baidu.pcap
 
-Contains a somewhat challenging file reconstruction case, 
+Contains a somewhat challenging PE file reconstruction case, 
 with many TCP segment reorderings and a data segment arriving 
 after the Server's FIN packet. If correctly reconstructed, 
 this should produce a PE file with 
 MD5 = 6b4f636288c88c25224de302a7231299
+
+- test_pe_corrupt_reset_trace_msecnd_anon.pcap
+
+Contains a case of a PE file download interrupted by a
+RST packet sent by the client in the middle of the download
+
 
 
