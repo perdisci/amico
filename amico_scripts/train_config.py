@@ -8,4 +8,4 @@ training_start_date = "2012-08-01"
 # If left as None, all the download events till the end are used
 # for training the classifier
 # training_days = 60
-training_days = 60
+training_days = 2

@@ -58,8 +58,8 @@ def print_arff(dump_id):
     w.write('@ATTRIBUTE class {pos, neg}\n\n')
     w.write('@DATA\n\n')
     try:
-        data_string = ','.join(['?' if value is None else str(value) for value
-            in values])
+        data_string = ','.join(['?' if (value is None or value is '') else
+            str(value) for value in values])
     except Exception as e:
         print "Error in writing feature vector to file!", e
     else:

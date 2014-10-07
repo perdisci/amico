@@ -86,7 +86,7 @@ class Trainer:
         for feature in features:
             values.append(res[feature])
         try:
-            data_string = ','.join(['?' if value is None else
+            data_string = ','.join(['?' if (value is None or value is '') else
                 str(value) for value in values])
         except Exception as e:
             print "Error in generating the feature vector in ARFF", e
