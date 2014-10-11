@@ -851,7 +851,8 @@ def insert_url_features(cursor, dump_id):
             virus_total_scans AS vts
         WHERE vts.trusted_av_labels > 1 AND
             pe.url = %s AND
-            pe.dump_id < %s """,
+            pe.dump_id < %s AND
+            pvm.vt_id = vts.vt_id""",
         (url, dump_id))
     url_malware_downloads = cursor.fetchone()[0]
 
