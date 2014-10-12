@@ -21,7 +21,7 @@ import traceback
 
 from config import whitelist_domains, vt_submissions as vts_config
 from vt_submit import vt_submissions_func
-from pe_extract import pe_extract
+from extract_file import extract_file
 from db_pe_dumps import db_pe_dumps
 from db_virus_total import db_virus_total
 from manual_download import manual_download
@@ -73,7 +73,7 @@ def process_file(raw_path, file_name):
             PE_DIR, "%s.exe" % (file_name,))
     print "raw_file", raw_path
     print "exe_path", exe_path
-    pe_extract(raw_path, exe_path)
+    file_type, file_path_name = extract_file(raw_path, exe_path)
     sha1, md5, file_size = get_file_hashes(exe_path)
     dump_id, corrupt_pe = db_pe_dumps(raw_path, sha1, md5, file_size)
     if not corrupt_pe:
