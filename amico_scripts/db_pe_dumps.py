@@ -78,7 +78,7 @@ def db_pe_dumps(file_path, sha1, md5, file_size):
 
     # CORRUPT_PE
     corrupt_pe = False
-    r = re.compile('CORRUPT_FILE')
+    r = re.compile('CORRUPT_(PE|FILE)')
     corrupt_pe_str = r.search(fileHandle.readline())
     if corrupt_pe_str is not None:
         corrupt_pe = True

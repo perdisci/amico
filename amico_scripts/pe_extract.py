@@ -71,8 +71,10 @@ def pe_extract(flow_file, dst=None):
         f = open(dst, 'wb')
         f.write(data)
         f.close()
+        return True
 
     print "Finished!"
+    return False
 
 
 if __name__ == '__main__':
