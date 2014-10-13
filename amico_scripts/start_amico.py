@@ -81,12 +81,14 @@ def process_file(raw_path, file_name):
     # If we are really dealing with a PE file
     sha1, md5, file_size = get_file_hashes(exe_path)
     dump_id, corrupt_pe = db_pe_dumps(raw_path, sha1, md5, file_size)
-    if not corrupt_pe:
-        Process(target=process_timeout,
-            args=(db_virus_total, (dump_id,), VT_TIMEOUT)).start()
-    if vts_config == "manual":
+
+    # query VT
+    Process(target=process_timeout,
+        args=(db_virus_total, (dump_id,), VT_TIMEOUT)).start()
+    if vts_config == "manual": # attempt to re-download the file "manually"
         Process(target=process_timeout,
             args=(manual_download, (sha1,), MD_TIMEOUT)).start()
+
     ip2asn(dump_id)
     get_feature_vector(dump_id)
     classify_dump(dump_id)
