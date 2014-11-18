@@ -785,7 +785,8 @@ def insert_download_request_features(cursor, dump_id):
         WHERE dump_id = %s""",
         (referer_exists, host_name_exists, dump_id))
 
-    common_ext = ['exe', 'dll', 'msi']
+    # Once we generalize to file types beyond PE files, the extension_class feature should probably be removed
+    common_ext = ['exe', 'dll', 'msi', 'jar', 'dmg', 'apk'] # executable files extensions...
     common_fake = ['html', 'gif', 'jpg', 'jpeg', 'txt', 'pdf', 'htm']
     other_ext = ['php', 'aspx', 'asp']
 

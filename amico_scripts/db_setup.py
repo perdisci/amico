@@ -50,7 +50,8 @@ try:
         sha1 VARCHAR(40),md5 VARCHAR(32),timestamp TIMESTAMP, server INET,
         client INET,method VARCHAR(10),url VARCHAR(512),host VARCHAR(256),
         referer VARCHAR(512),server_application VARCHAR(64),
-        content_type VARCHAR(128),dst_port INT,corrupt BOOLEAN,file_size INT)
+        content_type VARCHAR(128),dst_port INT,corrupt BOOLEAN,
+        file_size INT,file_type VARCHAR(5))
         """)
 except psycopg2.DatabaseError as e:
     print e

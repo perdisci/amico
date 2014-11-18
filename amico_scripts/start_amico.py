@@ -1,3 +1,5 @@
+#!/usr/bin/python
+#
 ###########################################################################
 # Copyright (C) 2014 Phani Vadrevu                                        #
 # pvadrevu@uga.edu                                                        #
@@ -21,8 +23,9 @@ import traceback
 
 from config import whitelist_domains, vt_submissions as vts_config
 from vt_submit import vt_submissions_func
-from pe_extract import pe_extract
-from db_pe_dumps import db_pe_dumps
+# from pe_extract import pe_extract
+from extract_file import extract_file
+from db_file_dumps import db_file_dumps
 from db_virus_total import db_virus_total
 from manual_download import manual_download
 from ip2asn import ip2asn
@@ -69,18 +72,17 @@ def get_file_hashes(file_path):
 
 
 def process_file(raw_path, file_name):
-    exe_path = os.path.join(
-            PE_DIR, "%s.exe" % (file_name,))
-    print "raw_file", raw_path
-    print "exe_path", exe_path
-    is_pe = pe_extract(raw_path, exe_path)
-    if not is_pe:
-        print "This is NOT a PE file! Skipping..."
+    file_type,file_path,file_extension = extract_file(raw_path)
+    print "raw_file:", raw_path
+    print "file_path:", file_path
+    if not file_type:
+        print "This is NOT a file of interest! Skipping..."
         return
+    print "file_type:", file_type
 
     # If we are really dealing with a PE file
-    sha1, md5, file_size = get_file_hashes(exe_path)
-    dump_id, corrupt_pe = db_pe_dumps(raw_path, sha1, md5, file_size)
+    sha1, md5, file_size = get_file_hashes(file_path)
+    dump_id, corrupt_pe = db_file_dumps(raw_path, sha1, md5, file_size, file_type)
 
     # query VT
     Process(target=process_timeout,
@@ -90,19 +92,18 @@ def process_file(raw_path, file_name):
             args=(manual_download, (sha1,), MD_TIMEOUT)).start()
 
     ip2asn(dump_id)
-    get_feature_vector(dump_id)
+    get_feature_vector(dump_id,file_extension)
     classify_dump(dump_id)
     Process(target=db_syslog, args=(dump_id,)).start()
     sha1_path = os.path.join(
-            PE_DIR, "%s.exe" % (sha1,))
+            PE_DIR, "%s.%s" % (sha1,file_type))
     md5_path = os.path.join(
-            PE_DIR, "%s.exe" % (md5,))
-    shutil.move(exe_path, sha1_path)
+            PE_DIR, "%s.%s" % (md5, file_type))
+    shutil.move(file_path, sha1_path)
     print "sha1_path", sha1_path
     print "md5_path", md5_path
     if not os.path.exists(md5_path):
-        print "os.path.exists(md5_path)", os.path.exists(md5_path)
-        os.symlink("%s.exe" % (sha1,), md5_path)
+        os.symlink("%s.%s" % (sha1,file_type), md5_path)
     print "Done processing file: %s" % (raw_path,)
 
 
