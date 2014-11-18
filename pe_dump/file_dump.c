@@ -531,6 +531,15 @@ void print_usage(char* cmd) {
     fprintf(stderr, "\t -L : Change LRU cache size (default = 10000 entries)\n");
     fprintf(stderr, "\t -K : Change max accepted reconstructed file size, in KB (e.g., -K 1024)\n");
     fprintf(stderr, "\t -D : Specify debug_level (value from 0-4)\n");
+
+    // WMGZPERSJ
+    fprintf(stderr, "\t -J : extract JAR/APK files\n");
+    fprintf(stderr, "\t -E : extract ELF files\n");
+    fprintf(stderr, "\t -G : extract DMG files\n");
+    fprintf(stderr, "\t -Z : extract ZIP files\n");
+    fprintf(stderr, "\t -R : extract RAR files\n");
+    fprintf(stderr, "\t -P : extract PDF files\n");
+    fprintf(stderr, "\t -M : extract MS DOC files\n");
     fprintf(stderr, "\n");
 }
 
