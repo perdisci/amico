@@ -92,7 +92,7 @@ def process_file(raw_path, file_name):
             args=(manual_download, (sha1,), MD_TIMEOUT)).start()
 
     ip2asn(dump_id)
-    get_feature_vector(dump_id,file_extension)
+    get_feature_vector(dump_id,file_type)
     classify_dump(dump_id)
     Process(target=db_syslog, args=(dump_id,)).start()
     sha1_path = os.path.join(

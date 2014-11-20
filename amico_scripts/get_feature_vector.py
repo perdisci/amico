@@ -1015,7 +1015,10 @@ def insert_url_struct_features(cursor, dump_id):
     insert_url_struct_matches(cursor, pmd, ptd, pds, dump_id)
 
 
-def insert_features(cursor, dump_id):
+# TODO: currently file_type is not used. 
+#       We will need to see if some of the features should be modified
+#       to tack the file_type into account
+def insert_features(cursor, dump_id, file_type):
     print "the dump_id is:", dump_id
     cursor.execute("""
         DELETE FROM weka_features
@@ -1043,11 +1046,11 @@ def insert_features(cursor, dump_id):
         print e
 
 
-def get_feature_vector(dump_id):
+def get_feature_vector(dump_id, file_type):
     #print "entered get_feature_vector"
     conn = util.connect_to_db()
     cursor = conn.cursor()
-    insert_features(cursor, dump_id)
+    insert_features(cursor, dump_id, file_type)
     print "Done inserting features for dump_id: ", dump_id
 
 if __name__ == "__main__":
