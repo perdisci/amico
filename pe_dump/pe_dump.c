@@ -942,9 +942,9 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
             int resp = PE_NOT_FOUND; // still waiting to see if we find a possible PE file
             int contentlen = get_content_length(tflow->sc_payload, tflow->sc_payload_size); // extract content lenght from HTTP response header
 
-            // We first make sure the content length is less than MAX_PE_FILE_SIZE
+            // We first make sure the content length is less than max_pe_file_size
             // otherwise we don't even try to check if there is a large PE file... force to abandon this flow!
-            if (contentlen > 0 && contentlen < MAX_PE_FILE_SIZE)
+            if (contentlen > 0 && contentlen < max_pe_file_size)
                 resp = contains_pe_file(tflow);
 
             if(resp == PE_FOUND) { // Found indication of a possible PE file in the reponse
