@@ -96,9 +96,9 @@ def process_file(raw_path, file_name):
     classify_dump(dump_id)
     Process(target=db_syslog, args=(dump_id,)).start()
     sha1_path = os.path.join(
-            PE_DIR, "%s.%s" % (sha1,file_type))
+            PE_DIR, "%s.%s" % (sha1,file_extension))
     md5_path = os.path.join(
-            PE_DIR, "%s.%s" % (md5, file_type))
+            PE_DIR, "%s.%s" % (md5,file_extension))
     shutil.move(file_path, sha1_path)
     print "sha1_path", sha1_path
     print "md5_path", md5_path
