@@ -11,6 +11,19 @@ If you are deploying AMICO in a large _university-like campus network_ and would
 You can also visit our [AMICO-Security Blog](http://amico-security.blogspot.com/).
 
 
+**SETUP AND DEPLOYMENT**
+Please refer to our project's Wiki for detailed information about system requirements, 
+setup, and deployment guidelines.
+
+
+**LICENSING**
+The code under the "master" branch is released under BSD license. 
+Please refer to the COPYING file under the master branch fore details.
+
+Code in other directories, such as "tags/amico-1.0" and "branches/experimental", 
+is currently released under GNU GPL.
+
+
 **News**:
   * [03/27/2015] All code in the master branch has been released under BSD license.
   * [03/27/2015] Moved all project files from GoogleCode to GitHub.
