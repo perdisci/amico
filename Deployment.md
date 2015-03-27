@@ -1,0 +1,7 @@
+# Example of how AMICO could be deployed in a network #
+
+In this example we assume the local network generates about 5Gbps of traffic, as seen from the network edge. We also assume that the network operator owns a traffic visibility switch, which allows for mirroring the network traffic to multiple ports. The "load balancing" of the mirrored traffic could be done on a per-flow base, if the switch has that capability, or by splitting the network into smaller source IP ranges and mirroring the traffic of an entire local subnetwork to a specific mirror port. The ultimate goal is to preserve TCP flow "consistency", whereby all packets belonging to the same TCP flow arrive to the same mirror port.
+
+To allow AMICO to reconstruct and classify all PE files observed in the traffic, in this scenario we could split the traffic over 6 x 1Gbps network cards. This way, we could simply run 6 different `pe_dump` processes, one per each network card. (Notice that even though we assume the traffic volume to be <= 5Gbps we suggest using 6 x 1Gbps cards to allow for some slack in case of traffic peaks).
+
+![http://www.cs.uga.edu/~perdisci/amico/Example_Deployment.jpg](http://www.cs.uga.edu/~perdisci/amico/Example_Deployment.jpg)
