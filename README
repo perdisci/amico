@@ -1,3 +1,11 @@
-Please refer to the following Wiki for detailed information about Amico code,
-system requirements and setup:
-https://code.google.com/p/amico/wiki/amico
+
+
+SETUP AND DEPLOYMENT
+
+Please refer to our project's Wiki for detailed information about system requirements, setup, and deployment guidelines.
+
+LICENSING
+
+The code in "trunk" is released under BSD license. Please refer to trunk/COPYING fore details.
+
+Code in other directories, such as "tags/amico-1.0" and "branches/experimental", is released under GNU GLP.

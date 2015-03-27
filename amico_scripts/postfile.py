@@ -1,3 +1,7 @@
+
+# Code borrowed from: http://code.activestate.com/recipes/146306/
+# Linked from: https://www.virustotal.com/en/documentation/public-api/ 
+
 import httplib, mimetypes
 
 

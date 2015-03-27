@@ -2,7 +2,7 @@
  * NOTE ON LICENCING FOR THIS FILE
  * The following code was borrowed from 
  * Wikipedia.org
- * For example it can be found here:
+ * For example, it can be found here:
  * http://en.wikipedia.org/w/index.php?title=Boyer%E2%80%93Moore_string_search_algorithm&oldid=399934077
  */
 

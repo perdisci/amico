@@ -1,3 +1,7 @@
+
+# Authors: Phani Vadrevu <pvadrevu@uga.edu>
+#          Roberto Perdisci <perdisci@cs.uga.edu>
+
 import subprocess
 import sys
 from config import whitelist_subnets, manual_download_ip

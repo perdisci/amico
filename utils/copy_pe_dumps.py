@@ -1,3 +1,6 @@
+
+# Author: Phani Vadrevu <pvadrevu@uga.edu>
+
 """
 A script to make a copy of the pe_dumps table with anonymized client IPs
 """
