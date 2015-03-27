@@ -1,0 +1,24 @@
+**AMICO** is a malware download classification tool that can be deployed in large networks. It reconstructs Windows PE files from the network traffic and determines if they are malicious or not based on their _provenance information_.
+
+To classify a PE file download event, AMICO looks at **who** is downloading **what** and from **where**, rather than analyzing the content of the downloaded files.
+
+For more technical information, please refer to this [ESORICS 2013 research paper](http://www.perdisci.com/publications/publication-files/amico.pdf)
+
+For more information on how to use and deploy AMICO, please go through the Wiki pages. This is an initial release of the system and we will keep refining the code and documentation. Please open a new Issue if you experience any problems.
+
+If you are deploying AMICO in a large _university-like campus network_ and would like to share your experience, report problems, or know more about our own deployment, please contact us at (**perdisci [-at-] cs.uga.edu**).
+
+You can also visit our [AMICO-Security Blog](http://amico-security.blogspot.com/).
+
+
+**News**:
+  * [03/27/2015] All code in the master branch has been released under BSD license.
+  * [03/27/2015] Moved all project files from GoogleCode to GitHub.
+  * [01/14/2015] Added some documentation about [syslog reports format](https://code.google.com/p/amico/wiki/SyslogReports).
+  * [11/20/2014] Added experimental code for supporting file formats other than Windows PE (see svn/branches/experimental). We can currently extract most JAR, APK, DMG, ZIP, RAR, PDF files, and even some Microsoft Office documents. _Limitations_: the feature extraction and provenance classifier currently treat all file types the same way; we are performing more research to see if the behavior-based detection approach used by AMICO can still work well even with non-executable files.
+  * [11/08/2014] We have created the [AMICO-Security Blog](http://amico-security.blogspot.com/), where we discuss malware campaign discoveries and other related topics.
+  * [10/09/2014] Quick steps for [tuning packet capture](https://code.google.com/p/amico/wiki/TuningPacketCapture) and drastically reduce packet loss.
+  * [10/03/2014] Added a brief [example of how AMICO can be deployed](https://code.google.com/p/amico/wiki/Deployment) in a network.
+  * [09/15/2014] We recently fixed a number of rarely-triggered bugs and improved general code quality and stability.
+  * [09/13/2014] In the Wiki, you can now find more information about the [pe\_dump](https://code.google.com/p/amico/wiki/pe_dump) component of AMICO.
+  * [08/26/2014] We successfully built a PF\_RING-aware version of AMICO (see [how we did it](https://code.google.com/p/amico/source/browse/trunk/external_libs/README))
