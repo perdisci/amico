@@ -12,7 +12,7 @@ You can also visit our [AMICO-Security Blog](http://amico-security.blogspot.com/
 
 
 **SETUP AND DEPLOYMENT**:
-Please refer to our project's Wiki for detailed information about system requirements, 
+Please refer to our [project's Wiki](https://github.com/perdisci/amico/wiki) for detailed information about system requirements, 
 setup, and deployment guidelines.
 
 
