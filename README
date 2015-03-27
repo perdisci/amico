@@ -6,6 +6,7 @@ Please refer to our project's Wiki for detailed information about system require
 
 LICENSING
 
-The code under the "master" branch is released under BSD license. Please refer to the COPYING file under the master branch fore details
+The code under the "master" branch is released under BSD license. 
+Please refer to the COPYING file under the master branch fore details.
 
 Code in other directories, such as "tags/amico-1.0" and "branches/experimental", is released under GNU GLP.
