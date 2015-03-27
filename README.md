@@ -1,3 +1,5 @@
+# Overview #
+
 **AMICO** is a malware download classification tool that can be deployed in large networks. It reconstructs Windows PE files from the network traffic and determines if they are malicious or not based on their _provenance information_.
 
 To classify a PE file download event, AMICO looks at **who** is downloading **what** and from **where**, rather than analyzing the content of the downloaded files.
@@ -11,19 +13,18 @@ If you are deploying AMICO in a large _university-like campus network_ and would
 You can also visit our [AMICO-Security Blog](http://amico-security.blogspot.com/).
 
 
-**SETUP AND DEPLOYMENT**:
-Please refer to our [project's Wiki](https://github.com/perdisci/amico/wiki) for detailed information about system requirements, 
-setup, and deployment guidelines.
+## SETUP AND DEPLOYMENT ##
+Please refer to our [project's Wiki](https://github.com/perdisci/amico/wiki) for detailed information about system requirements, setup, and deployment guidelines.
 
 
-**LICENSING**:
-The code under the "master" branch is released under BSD license. Please refer to the COPYING file under the master branch fore details.
+## LICENSING ##
+The code under the "master" branch is released under BSD license. Please refer to the COPYING file under the master branch for details.
 
 Notice that code in other directories, such as "tags/amico-1.0" and "branches/experimental", is currently released under GNU GPL.
 
 
-**News**:
-  * [03/27/2015] All code in the master branch has been released under BSD license.
+## News ##
+  * [03/27/2015] All code in the master branch has been released under **BSD license**.
   * [03/27/2015] Moved all project files from GoogleCode to GitHub.
   * [01/14/2015] Added some documentation about [syslog reports format](https://github.com/perdisci/amico/wiki/Syslog-Reports-Format).
   * [11/20/2014] Added experimental code for supporting file formats other than Windows PE (see svn/branches/experimental). We can currently extract most JAR, APK, DMG, ZIP, RAR, PDF files, and even some Microsoft Office documents. _Limitations_: the feature extraction and provenance classifier currently treat all file types the same way; we are performing more research to see if the behavior-based detection approach used by AMICO can still work well even with non-executable files.
