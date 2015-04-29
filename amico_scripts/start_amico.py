@@ -76,9 +76,11 @@ def process_file(raw_path, file_name):
     print "raw_file:", raw_path
     print "file_path:", file_path
     if not file_type:
-        print "This is NOT a file of interest! Removing raw data from disk..."
+        print "This is NOT a file of interest! "
+        print "Removing raw data from disk:", raw_path
         # remove the related raw file
         os.remove(raw_path)
+        print "Removed!"
         return
     print "file_type:", file_type
 
