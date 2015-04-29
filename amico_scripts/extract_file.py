@@ -142,7 +142,7 @@ def extract_file(flow_file, dst=None):
         file_type = "JAR"
         file_extension = "jar"
 
-    if not file_type and is_apk_file(data):
+    if (not file_type or file_type=="JAR") and is_apk_file(data):
         file_type = "APK"
         file_extension = "apk"
 
