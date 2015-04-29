@@ -17,7 +17,7 @@
 import sys, os
 import re
 from struct import unpack
-from config.py import capture_file_types
+from config import capture_file_types
 
 def prune_http_resp_headers(data):
     # finds start of resp header
