@@ -17,6 +17,7 @@
 import sys, os
 import re
 from struct import unpack
+from config.py import capture_file_types
 
 def prune_http_resp_headers(data):
     # finds start of resp header
@@ -135,56 +136,57 @@ def extract_file(flow_file, dst=None):
 
     if not file_type and is_pe_file(data):
         file_type = "EXE"
-        file_extension = ".exe"
+        file_extension = "exe"
 
     if not file_type and is_jar_file(data):
         file_type = "JAR"
-        file_extension = ".jar"
+        file_extension = "jar"
 
     if not file_type and is_apk_file(data):
         file_type = "APK"
-        file_extension = ".apk"
+        file_extension = "apk"
 
     if not file_type and is_elf_file(data):
         file_type = "ELF"
-        file_extension = ".elf"
+        file_extension = "elf"
 
     if not file_type and is_dmg_file(data):
         file_type = "DMG"
-        file_extension = ".dmg"
+        file_extension = "dmg"
 
     if not file_type and is_msdoc_file(data):
         file_type = "MSDOC"
-        file_extensions = ".msdoc" # generic for DOC(X), PPT(X), XLS(X), etc.
+        file_extension = "msdoc" # generic for DOC(X), PPT(X), XLS(X), etc.
 
     if not file_type and is_rar_file(data):
         file_type = "RAR"
-        file_extension = ".rar"
+        file_extension = "rar"
 
     if not file_type and is_swf_file(data):
         file_type = "SWF"
-        file_extension = ".swf"
+        file_extension = "swf"
 
     if not file_type and is_pdf_file(data):
         file_type = "PDF"
-        file_extension = ".pdf"
+        file_extension = "pdf"
 
     if not file_type and is_zip_file(data): 
         # notice that this is more generic than other 
         # derived file formats (e.g., JAR, DOCX, etc.)
         # and therefore this check should run last!
         file_type = "ZIP"
-        file_extenstion = ".zip"
+        file_extension = "zip"
 
-    if file_type != None:
-        dst = dst+file_extension 
+    if file_type in capture_file_types:
+        dst = dst+'.'+file_extension 
         print "Writing file:", dst
         f = open(dst, 'wb')
         f.write(data)
         f.close()
         print "Finished!"
+        return (file_type, dst, file_extension)
 
-    return (file_type, dst, file_extension)
+    return(None, None, None)
 
 
 

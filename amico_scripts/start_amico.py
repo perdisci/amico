@@ -36,7 +36,7 @@ from db_syslog import db_syslog
 WAIT_TIME = 1
 DUMP_DIR = "../pe_dump/dumps"
 RAW_DIR = "parsed/raw_files/"
-PE_DIR = "parsed/pe_files/"
+FILES_DIR = "parsed/captured_files/"
 MD_TIMEOUT = 180
 VT_TIMEOUT = 60
 
@@ -77,6 +77,8 @@ def process_file(raw_path, file_name):
     print "file_path:", file_path
     if not file_type:
         print "This is NOT a file of interest! Skipping..."
+        # remove the related raw file
+        os.remove(raw_file)
         return
     print "file_type:", file_type
 
@@ -96,14 +98,14 @@ def process_file(raw_path, file_name):
     classify_dump(dump_id)
     Process(target=db_syslog, args=(dump_id,)).start()
     sha1_path = os.path.join(
-            PE_DIR, "%s.%s" % (sha1,file_extension))
+            FILES_DIR, "%s.%s" % (sha1,file_extension))
     md5_path = os.path.join(
-            PE_DIR, "%s.%s" % (md5,file_extension))
+            FILES_DIR, "%s.%s" % (md5,file_extension))
     shutil.move(file_path, sha1_path)
     print "sha1_path", sha1_path
     print "md5_path", md5_path
     if not os.path.exists(md5_path):
-        os.symlink("%s.%s" % (sha1,file_type), md5_path)
+        os.symlink("%s.%s" % (sha1,file_extension), md5_path)
     print "Done processing file: %s" % (raw_path,)
 
 

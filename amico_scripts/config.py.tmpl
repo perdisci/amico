@@ -30,6 +30,12 @@ vt_submissions = "live"
 trusted_av_vendors = ["Avast", "AVG", "F-Secure", "Kaspersky", "McAfee",
                     "Microsoft", "Sophos", "Symantec", "TrendMicro"]
 
+
+# file types that should be captured and stored on disk
+# see extract_file.py for available types
+capture_file_types = ["EXE"]
+
+
 # Manual downloads are only enabled if vt_submissions = "manual"
 # Every time a download is detected using the URL from which the executable has
 # been downloaded, a new HTTP request is created and the file is refetched from
