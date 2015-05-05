@@ -119,6 +119,46 @@ def is_dmg_file(bin_data):
     return False
 
 
+def extract_file_type(data):
+
+    file_type = None
+
+    if not file_type and is_pe_file(data):
+        file_type = "EXE"
+
+    if not file_type and is_jar_file(data):
+        file_type = "JAR"
+
+    if (not file_type or file_type=="JAR") and is_apk_file(data):
+        file_type = "APK"
+
+    if not file_type and is_elf_file(data):
+        file_type = "ELF"
+
+    if not file_type and is_dmg_file(data):
+        file_type = "DMG"
+
+    if not file_type and is_msdoc_file(data):
+        file_type = "MSDOC"
+
+    if not file_type and is_rar_file(data):
+        file_type = "RAR"
+
+    if not file_type and is_swf_file(data):
+        file_type = "SWF"
+
+    if not file_type and is_pdf_file(data):
+        file_type = "PDF"
+
+    if not file_type and is_zip_file(data):
+        # notice that this is more generic than other
+        # derived file formats (e.g., JAR, DOCX, etc.)
+        # and therefore this check should run last!
+        file_type = "ZIP"
+
+    return file_type
+
+
 
 def extract_file(flow_file, dst=None):
 

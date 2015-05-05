@@ -1,6 +1,7 @@
-##########################################################################
-# Copyright (C) 2011 Phani Vadrevu                                        #
+###########################################################################
+# Copyright (C) 2011 Phani Vadrevu, Roberto Perdisci                      #
 # pvadrevu@uga.edu                                                        #
+# perdisci@cs.uga.edu                                                     #
 #                                                                         #
 # Distributed under the GNU Public License                                #
 # http://www.gnu.org/licenses/gpl.txt                                     #   
@@ -17,6 +18,8 @@ import re
 import time
 import hashlib
 from struct import unpack
+from config import capture_file_types
+from extract_file import extract_file_type
 
 import urllib2
 
@@ -25,26 +28,6 @@ from config import MAN_DOWNLOAD_DIR
 
 USER_AGENT = "Mozilla/5.0 (Windows; U; MSIE 7.0; Windows NT 6.0; en-US)"
 HTTP_TIMEOUT = 40  # HTTP Request timeout
-
-# checks for valid PE header
-def is_pe_file(bin_data):
-    if not bin_data:
-        return False
-
-    if len(bin_data) <= 0:
-        return False
-
-    m = re.search('MZ', bin_data)
-    if m:
-        p = m.start()
-        offset = p + unpack('i', bin_data[p+0x3c:p+0x3c+4])[0]
-        # print "p=", p, "  offset=", offset
-        if bin_data[p:p+2] == 'MZ' and bin_data[offset:offset+2] == 'PE':
-            # print "This is a PE file!"
-            return True
-
-    print "This is NOT a PE file!"
-    return False
 
 
 # Take the request, download the file and generate sha1 and md5 hashes
@@ -60,31 +43,36 @@ def download_file(dump_id, req, captured_sha1):
 
     sha1 = None
     md5 = None
-    is_pe = None
+    is_interesting_file = None
 
     if res is None:
         print "Executable could not be downloaded manually"
     else:
-        if is_pe_file(res):
+        file_type = extract_file_type(res)
+        if file_type in capture_file_types:
+            print "Manually downloaded", file_type, "file"
             sha1 = hashlib.sha1(res).hexdigest()
 
             # Store the downloaded file in a sub directory as md5.exe
             md5 = hashlib.md5(res).hexdigest()
 
-            download_file = open(MAN_DOWNLOAD_DIR + "/" + md5 + ".exe", "w")
+            download_file = open(MAN_DOWNLOAD_DIR + "/" + md5 + "." + file_type, "w")
             download_file.write(res)
             download_file.close()
-            print "Written " + MAN_DOWNLOAD_DIR + "/" + md5 + ".exe"
-            is_pe = True
+            print "Written " + MAN_DOWNLOAD_DIR + "/" + md5 + "." + file_type
+            is_interesting_file = True
         else:
-            print "Downloaded a non-PE file!"
-            is_pe = False
+            print "Manually downloaded an uninteresting file!"
+            is_interesting_file = False
+
     if captured_sha1 != sha1:
         different = True
         print "Checksums did not match for dump_id: ", dump_id
+        print captured_sha1, "!=", sha1
     else:
         different = False
-    return sha1, md5, different, is_pe
+
+    return sha1, md5, different, is_interesting_file
 
 
 def manual_download(captured_sha1):
@@ -115,14 +103,14 @@ def manual_download(captured_sha1):
     req.add_header("User-Agent", USER_AGENT)
 
     download_time = time.time()
-    sha1, md5, different, is_pe = download_file(dump_id, req, captured_sha1)
+    sha1, md5, different, is_interesting_file = download_file(dump_id, req, captured_sha1)
 
     # Database statement
     cursor.execute("""
         INSERT INTO manual_download_checksums(dump_id, sha1,
         md5, different, referer_exists, timestamp, is_pe)
         VALUES (%s, %s, %s, %s, %s, TO_TIMESTAMP(%s), %s)""",
-        (dump_id, sha1, md5, different, False, download_time, is_pe))
+        (dump_id, sha1, md5, different, False, download_time, is_interesting_file))
 
     cursor.close()
     conn.close()
