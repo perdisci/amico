@@ -28,7 +28,7 @@ def make_syslog_entry(cursor, dump_id):
     # Database query to get the relevant record
     cursor.execute("""
         SELECT timestamp, client, server, dst_port, host, url, referer,
-            pe.sha1, pe.md5, file_size, trusted_av_labels, corrupt
+            pe.sha1, pe.md5, file_size, trusted_av_labels, corrupt, file_type
         FROM pe_dumps as pe JOIN ped_vts_mapping as pvm USING(dump_id),
             virus_total_scans as vts
         WHERE dump_id = '%s'
@@ -56,7 +56,7 @@ def make_syslog_entry(cursor, dump_id):
         #print log_data
         entry = ("PE file download -- timestamp: %s, client_ip: %s, server_ip:"
         " %s, server_port: %s, host: %s, url: %s, referrer: %s, sha1: %s, md5:"
-        " %s, file_size: %s, av_labels: %s, corrupt: %s, amico_score: %s" %
+        " %s, file_size: %s, av_labels: %s, corrupt: %s, file_type: %s, amico_score: %s" %
             tuple(log_data))
         #     syslog.syslog(syslog.LOG_ALERT,q)
         syslog.syslog(syslog.LOG_WARNING | syslog.LOG_USER, entry)
