@@ -24,6 +24,7 @@ Notice that code in other directories, such as "tags/amico-1.0" and "branches/ex
 
 
 ## News ##
+  * [04/29/2015] Improved experimental branch code, and tested capture and classification of APKs and JARs in a large network.
   * [03/27/2015] All code in the master branch has been released under **BSD license**.
   * [03/27/2015] Moved all project files from GoogleCode to GitHub.
   * [01/14/2015] Added some documentation about [syslog reports format](https://github.com/perdisci/amico/wiki/Syslog-Reports-Format).
