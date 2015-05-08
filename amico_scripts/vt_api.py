@@ -33,14 +33,25 @@ def send_file(md5):
     host = "www.virustotal.com"
     selector = "https://www.virustotal.com/vtapi/v2/file/scan"
     fields = [("apikey", get_vt_key())]
+
+    file_to_send = None
     if vt_submissions == "manual":
-        file_to_send = open("%s/%s.exe" % (MAN_DOWNLOAD_DIR, md5), "rb").read()
-    else:
-        file_to_send = open("parsed/pe_files/%s.exe" % (md5,), "rb").read()
+        file_name = "%s/%s.EXE" % (MAN_DOWNLOAD_DIR, md5)
+        print "File submission to VT (manual):", file_name
+        file_to_send = open(file_name, "rb").read()
+    elif vt_submissions == "live":
+        file_name = "parsed/captured_files/%s.exe" % (md5,)
+        print "File submission to VT:", file_name
+        file_to_send = open(file_name, "rb").read()
 
     files = [("file", "%s.exe" % (md5,), file_to_send)]
     json = postfile.post_multipart(host, selector, fields, files)
+
+    if file_to_send:
+        file_to_send.close()
+
     return json
+
 
 
 # Either a singe hash or a list of hashes (upto 25) can be passed
