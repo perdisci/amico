@@ -8,13 +8,17 @@ For more technical information, please refer to this [ESORICS 2013 research pape
 
 For more information on how to use and deploy AMICO, please go through the Wiki pages. This is an initial release of the system and we will keep refining the code and documentation. Please open a new Issue if you experience any problems.
 
-If you are deploying AMICO in a large _university-like campus network_ and would like to share your experience, report problems, or know more about our own deployment, please contact us at (**perdisci [-at-] cs.uga.edu**).
-
 You can also visit our [AMICO-Security Blog](http://amico-security.blogspot.com/).
 
 
 ## SETUP AND DEPLOYMENT ##
 Please refer to our [project's Wiki](https://github.com/perdisci/amico/wiki) for detailed information about system requirements, setup, and deployment guidelines.
+
+
+## CONTACT US ##
+If you have any questions, please post a message on our [AMICO-security forum](https://groups.google.com/forum/#!forum/amico-security).
+
+If you are deploying AMICO in a large _university-like campus network_ and would like to share your experience or know more about our own deployment, please contact us privately at (**perdisci [-at-] cs.uga.edu**).
 
 
 ## LICENSING ##
