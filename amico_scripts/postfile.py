@@ -4,6 +4,8 @@
 
 import httplib, mimetypes
 
+from config import https_proxy_host, https_proxy_port
+
 
 def post_multipart(host, selector, fields, files):
     """
@@ -13,7 +15,12 @@ def post_multipart(host, selector, fields, files):
     Return the server's response page.
     """
     content_type, body = encode_multipart_formdata(fields, files)
-    h = httplib.HTTPSConnection(host, timeout=120)
+
+    if https_proxy_host is not None:
+        h = httplib.HTTPSConnection(https_proxy_host, https_proxy_port, timeout=120)
+        h.set_tunnel(host)
+    else:
+        h = httplib.HTTPSConnection(host, timeout=120)
     h.putrequest('POST', selector)
     h.putheader('content-type', content_type)
     h.putheader('content-length', str(len(body)))

@@ -8,6 +8,9 @@ import random
 import postfile
 import config
 from config import *
+import util
+
+util.setup_https_proxy()
 
 TIMEOUT = 10
 

@@ -9,6 +9,7 @@ import socket
 import socks
 import psycopg2
 import etld
+import urllib2
 
 from config import *
 
@@ -87,7 +88,16 @@ def reverse_ip(ip):
 
 # Setup SOCKS proxy
 def setup_socks():
-    if socks_proxy_host:
+    if socks_proxy_host is not None:
         socks.setdefaultproxy(socks.PROXY_TYPE_SOCKS5, socks_proxy_host,
                 socks_proxy_port)
         socket.socket = socks.socksocket
+
+
+# Setup HTTPS proxy for urllib2's urlopen function calls
+def setup_https_proxy():
+    if https_proxy_host is not None:
+        proxy_str = ":".join([https_proxy_host, str(https_proxy_port)])
+        proxy_handler = urllib2.ProxyHandler({"https":proxy_str})
+        opener = urllib2.build_opener(proxy_handler)
+        urllib2.install_opener(opener)

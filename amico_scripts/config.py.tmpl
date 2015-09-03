@@ -32,6 +32,13 @@ MAN_DOWNLOAD_DIR = "manual_downloads"
 socks_proxy_host = None
 socks_proxy_port = 12345
 
+# When running AMICO behind a HTTP proxy, use the following,
+# else leave https_proxy_host as "None"
+# All HTTPS queries to VirusTotal will be directed through this proxy
+#https_proxy_host = "localhost"
+https_proxy_host = None
+https_proxy_port = 8888
+
 
 # The threshold value for classification between (0,1)
 # used in db_syslog.py script
