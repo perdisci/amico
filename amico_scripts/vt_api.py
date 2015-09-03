@@ -22,15 +22,15 @@ def get_vt_key():
     return vt_keys[k]  # vt_keys must be a list of valid virust_total API keys
 
 
-def send_file(md5):
+def send_file(md5, file_to_send=None):
     host = "www.virustotal.com"
     selector = "https://www.virustotal.com/vtapi/v2/file/scan"
     fields = [("apikey", get_vt_key())]
-    if vt_submissions == "manual":
-        file_to_send = open("%s/%s.exe" % (MAN_DOWNLOAD_DIR, md5), "rb").read()
-    else:
-        file_to_send = open("parsed/pe_files/%s.exe" % (md5,), "rb").read()
-
+    if file_to_send is None:
+        if vt_submissions == "manual":
+            file_to_send = open("%s/%s.exe" % (MAN_DOWNLOAD_DIR, md5), "rb").read()
+        else:
+            file_to_send = open("parsed/pe_files/%s.exe" % (md5,), "rb").read()
     files = [("file", "%s.exe" % (md5,), file_to_send)]
     json = postfile.post_multipart(host, selector, fields, files)
     return json
