@@ -94,10 +94,19 @@ def setup_socks():
         socket.socket = socks.socksocket
 
 
+def _get_proxy_url():
+    if https_proxy_username is not None:
+        proxy_url = "%s:%s@%s:%s" % (https_proxy_username, https_proxy_passwd,
+                                     https_proxy_host, https_proxy_port)
+    else:
+        proxy_url = "%s:%s" % (https_proxy_host, https_proxy_port)
+    return proxy_url
+
+
 # Setup HTTPS proxy for urllib2's urlopen function calls
 def setup_https_proxy():
     if https_proxy_host is not None:
-        proxy_str = ":".join([https_proxy_host, str(https_proxy_port)])
-        proxy_handler = urllib2.ProxyHandler({"https":proxy_str})
+        proxy_url = _get_proxy_url()
+        proxy_handler = urllib2.ProxyHandler({"https": proxy_url})
         opener = urllib2.build_opener(proxy_handler)
         urllib2.install_opener(opener)

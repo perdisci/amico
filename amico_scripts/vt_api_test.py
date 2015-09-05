@@ -7,7 +7,6 @@ import vt_api
 # Create config.py and fill in vt_keys before using this unit test
 
 class TestVtApi(unittest.TestCase):
-
     def test_get_vt_report(self,):
         md5_hash = "86b6c59aa48a69e16d3313d982791398"
         json_str = vt_api.get_vt_report(md5_hash)
