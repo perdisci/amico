@@ -2,9 +2,8 @@
 # Code borrowed from: http://code.activestate.com/recipes/146306/
 # Linked from: https://www.virustotal.com/en/documentation/public-api/ 
 
-import httplib, mimetypes
-
-from config import https_proxy_host, https_proxy_port
+import mimetypes
+import urllib2
 
 
 def post_multipart(host, selector, fields, files):
@@ -16,17 +15,16 @@ def post_multipart(host, selector, fields, files):
     """
     content_type, body = encode_multipart_formdata(fields, files)
 
-    if https_proxy_host is not None:
-        h = httplib.HTTPSConnection(https_proxy_host, https_proxy_port, timeout=120)
-        h.set_tunnel(host)
-    else:
-        h = httplib.HTTPSConnection(host, timeout=120)
-    h.putrequest('POST', selector)
-    h.putheader('content-type', content_type)
-    h.putheader('content-length', str(len(body)))
-    h.endheaders()
-    h.send(body)
-    return h.getresponse().read()
+    headers = {'content-type': content_type,
+               'content-length': str(len(body))}
+    req = urllib2.Request(selector, body, headers)
+
+    try:
+        response = urllib2.urlopen(req, timeout=120)
+    except Exception as e:
+        print "post_multipart: Exception occured", e
+        return
+    return response.read()
 
 
 def encode_multipart_formdata(fields, files):
