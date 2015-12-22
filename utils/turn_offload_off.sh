@@ -6,7 +6,7 @@ NIC=$1
 
 ifconfig $NIC down
 ifconfig $NIC up
-ethtool -G ethX rx 4096
+ethtool -G $NIC rx 4096
 
 ethtool -K $NIC tso off
 ethtool -K $NIC gro off
