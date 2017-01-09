@@ -20,7 +20,8 @@ def make_syslog_entry(cursor, dump_id):
             pe.sha1, pe.md5, file_size, trusted_av_labels, corrupt
         FROM pe_dumps as pe JOIN ped_vts_mapping as pvm USING(dump_id),
             virus_total_scans as vts
-        WHERE dump_id = '%s'
+        WHERE vts.vt_id = pvm.vt_id AND
+            dump_id = '%s'
         """ % (dump_id,))
     if cursor.rowcount == 0:
         return
