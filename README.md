@@ -28,6 +28,7 @@ Notice that code in other directories, such as "tags/amico-1.0" and "branches/ex
 
 
 ## News ##
+  * [01/11/2016] Enabled submission of file types other than EXE to VirusTotal (in the experimental branch only).
   * [04/29/2015] Improved [experimental branch code](https://github.com/perdisci/amico/tree/experimental), and tested capture and classification of APKs and JARs in a large network.
   * [03/27/2015] All code in the master branch has been released under **BSD license**.
   * [03/27/2015] Moved all project files from GoogleCode to GitHub.
