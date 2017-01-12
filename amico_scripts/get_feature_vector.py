@@ -44,6 +44,7 @@ def insert_host_based_features(cursor, dump_id):
         SELECT COUNT(DISTINCT dump_id)
         FROM pe_dumps AS pe
         WHERE pe.host = %s AND
+            pe.corrupt = 'f' AND
             pe.dump_id < %s AND pe.dump_id > %s """,
         (host, dump_id, dump_id-MAX_PAST_DUMPS))
     host_total_downloads = cursor.fetchone()[0]
@@ -61,6 +62,7 @@ def insert_host_based_features(cursor, dump_id):
             ped_vts_mapping AS pvm USING (dump_id),
             virus_total_scans AS vts
         WHERE vts.num_av_labels = 0 AND
+            pe.corrupt = 'f' AND
             pe.host = %s AND
             pe.dump_id < %s AND pe.dump_id > %s AND
             vts.vt_id = pvm.vt_id""",
@@ -73,6 +75,7 @@ def insert_host_based_features(cursor, dump_id):
             ped_vts_mapping AS pvm USING (dump_id),
             virus_total_scans AS vts
         WHERE vts.trusted_av_labels > 1 AND
+            pe.corrupt = 'f' AND
             pe.host = %s AND
             pe.dump_id < %s AND pe.dump_id > %s AND
             vts.vt_id = pvm.vt_id""",
@@ -85,6 +88,7 @@ def insert_host_based_features(cursor, dump_id):
             ped_vts_mapping AS pvm USING (dump_id),
             virus_total_scans AS vts
         WHERE vts.num_av_labels > 1 AND
+            pe.corrupt = 'f' AND
             pe.host = %s AND
             pe.dump_id < %s AND pe.dump_id > %s AND
             vts.vt_id = pvm.vt_id""",
@@ -218,6 +222,7 @@ def insert_twold_based_features(cursor, dump_id):
         SELECT COUNT(DISTINCT dump_id)
         FROM pe_dumps AS pe
         WHERE pe.host LIKE %s AND
+            pe.corrupt = 'f' AND
             pe.dump_id < %s AND pe.dump_id > %s""",
         (twold, dump_id, dump_id-MAX_PAST_DUMPS))
     twold_total_downloads = cursor.fetchone()[0]
@@ -235,6 +240,7 @@ def insert_twold_based_features(cursor, dump_id):
             ped_vts_mapping AS pvm USING (dump_id),
             virus_total_scans AS vts
         WHERE vts.num_av_labels = 0 AND
+            pe.corrupt = 'f' AND
             pe.host LIKE %s AND
             pe.dump_id < %s AND pe.dump_id > %s AND
             vts.vt_id = pvm.vt_id""",
@@ -247,6 +253,7 @@ def insert_twold_based_features(cursor, dump_id):
             ped_vts_mapping AS pvm USING (dump_id),
             virus_total_scans AS vts
         WHERE vts.trusted_av_labels > 1 AND
+            pe.corrupt = 'f' AND
             pe.host LIKE %s AND
             pe.dump_id < %s AND pe.dump_id > %s AND
             vts.vt_id = pvm.vt_id""",
@@ -259,6 +266,7 @@ def insert_twold_based_features(cursor, dump_id):
             ped_vts_mapping AS pvm USING (dump_id),
             virus_total_scans AS vts
         WHERE vts.num_av_labels > 1 AND
+            pe.corrupt = 'f' AND
             pe.host LIKE %s AND
             pe.dump_id < %s AND pe.dump_id > %s AND
             vts.vt_id = pvm.vt_id""",
@@ -379,6 +387,7 @@ def insert_server_ip_based_features(cursor, dump_id):
         SELECT COUNT(DISTINCT dump_id)
         FROM pe_dumps AS pe
         WHERE pe.server = %s AND
+            pe.corrupt = 'f' AND
             pe.dump_id < %s AND pe.dump_id > %s """,
         (server_ip, dump_id, dump_id-MAX_PAST_DUMPS))
     server_ip_total_downloads = cursor.fetchone()[0]
@@ -397,6 +406,7 @@ def insert_server_ip_based_features(cursor, dump_id):
             ped_vts_mapping AS pvm USING (dump_id),
             virus_total_scans AS vts
         WHERE vts.num_av_labels = 0 AND
+            pe.corrupt = 'f' AND
             pe.server = %s AND
             pe.dump_id < %s AND pe.dump_id > %s AND
             vts.vt_id = pvm.vt_id""",
@@ -409,6 +419,7 @@ def insert_server_ip_based_features(cursor, dump_id):
             ped_vts_mapping AS pvm USING (dump_id),
             virus_total_scans AS vts
         WHERE vts.trusted_av_labels > 1 AND
+            pe.corrupt = 'f' AND
             pe.server = %s AND
             pe.dump_id < %s AND pe.dump_id >  %s AND
             vts.vt_id = pvm.vt_id""",
@@ -421,6 +432,7 @@ def insert_server_ip_based_features(cursor, dump_id):
             ped_vts_mapping AS pvm USING (dump_id),
             virus_total_scans AS vts
         WHERE vts.num_av_labels > 1 AND
+            pe.corrupt = 'f' AND
             pe.server = %s AND
             pe.dump_id < %s AND pe.dump_id > %s AND
             vts.vt_id = pvm.vt_id""",
@@ -544,6 +556,7 @@ def insert_bgp_based_features(cursor, dump_id):
         SELECT COUNT(DISTINCT dump_id)
         FROM pe_dumps AS pe
         WHERE pe.server << %s AND
+            pe.corrupt = 'f' AND
             pe.dump_id < %s AND pe.dump_id > %s """,
         (bgp_prefix, dump_id, dump_id-MAX_PAST_DUMPS))
     bgp_total_downloads = cursor.fetchone()[0]
@@ -561,6 +574,7 @@ def insert_bgp_based_features(cursor, dump_id):
             ped_vts_mapping AS pvm USING (dump_id),
             virus_total_scans AS vts
         WHERE vts.num_av_labels = 0 AND
+            pe.corrupt = 'f' AND
             pe.server << %s AND
             pe.dump_id < %s AND pe.dump_id > %s AND 
             vts.vt_id = pvm.vt_id""",
@@ -573,6 +587,7 @@ def insert_bgp_based_features(cursor, dump_id):
             ped_vts_mapping AS pvm USING (dump_id),
             virus_total_scans AS vts
         WHERE vts.trusted_av_labels > 1 AND
+            pe.corrupt = 'f' AND
             pe.server << %s AND
             pe.dump_id < %s AND pe.dump_id > %s AND
             vts.vt_id = pvm.vt_id""",
@@ -585,6 +600,7 @@ def insert_bgp_based_features(cursor, dump_id):
             ped_vts_mapping AS pvm USING (dump_id),
             virus_total_scans AS vts
         WHERE vts.num_av_labels > 1 AND
+            pe.corrupt = 'f' AND
             pe.server << %s AND
             pe.dump_id < %s AND pe.dump_id > %s AND 
             vts.vt_id = pvm.vt_id""",
@@ -701,6 +717,7 @@ def insert_hash_based_features(cursor, dump_id):
             COUNT(DISTINCT pe.dump_id)
         FROM pe_dumps AS pe
         WHERE pe.dump_id < %s AND pe.dump_id > %s AND
+            pe.corrupt = 'f' AND
             pe.sha1 = %s AND
             pe.corrupt = 'f' """,
         (dump_id, dump_id-MAX_PAST_DUMPS, sha1))
@@ -857,6 +874,7 @@ def insert_url_features(cursor, dump_id):
             ped_vts_mapping AS pvm USING (dump_id),
             virus_total_scans AS vts
         WHERE vts.trusted_av_labels > 1 AND
+            pe.corrupt = 'f' AND
             pe.url = %s AND
             pe.dump_id < %s AND pe.dump_id > %s AND
             pvm.vt_id = vts.vt_id """,
@@ -867,6 +885,7 @@ def insert_url_features(cursor, dump_id):
         SELECT COUNT(DISTINCT dump_id)
         FROM pe_dumps AS pe
         WHERE pe.url = %s AND
+            pe.corrupt = 'f' AND
             pe.dump_id < %s AND pe.dump_id > %s """,
         (url, dump_id, dump_id-MAX_PAST_DUMPS))
     url_total_downloads = cursor.fetchone()[0]
@@ -875,6 +894,7 @@ def insert_url_features(cursor, dump_id):
         SELECT COUNT(DISTINCT pe.sha1)
         FROM pe_dumps AS pe
         WHERE pe.url = %s AND
+            pe.corrupt = 'f' AND
             pe.dump_id < %s AND pe.dump_id > %s AND
             pe.corrupt='f' """,
         (url, dump_id, dump_id-MAX_PAST_DUMPS))
@@ -909,28 +929,17 @@ def get_url_struct_matches(cursor, url_struct, dump_id):
             virus_total_scans AS vts
         WHERE vts.trusted_av_labels > 1 AND
             pvm.vt_id = vts.vt_id AND
+            pe.corrupt = 'f' AND
             pe.url ~ %s AND
             pe.dump_id < %s AND pe.dump_id > %s """,
         (url_struct, dump_id, dump_id-MAX_PAST_DUMPS))
     url_struct_malware_downloads = cursor.fetchone()[0]
-    cursor.execute("""
-        SELECT DISTINCT pe.url, pe.host
-        FROM pe_dumps AS pe JOIN
-            ped_vts_mapping AS pvm USING (dump_id),
-            virus_total_scans AS vts
-        WHERE vts.trusted_av_labels > 1 AND
-            pe.url ~ %s AND
-            pe.dump_id < %s AND pe.dump_id > %s """,
-        (url_struct, dump_id, dump_id-MAX_PAST_DUMPS))
-    urls = cursor.fetchall()
-    #print "the urls:"
-    #for url in urls:
-        #print url[0], url[1]
 
     cursor.execute("""
         SELECT COUNT(DISTINCT dump_id)
         FROM pe_dumps AS pe
         WHERE pe.url ~ %s AND
+            pe.corrupt = 'f' AND
             pe.dump_id < %s AND pe.dump_id > %s """,
         (url_struct, dump_id, dump_id-MAX_PAST_DUMPS))
     url_struct_total_downloads = cursor.fetchone()[0]
@@ -1017,7 +1026,7 @@ def insert_url_struct_features(cursor, dump_id):
 
 # TODO: currently file_type is not used. 
 #       We will need to see if some of the features should be modified
-#       to tack the file_type into account
+#       to take the file_type into account
 def insert_features(cursor, dump_id, file_type):
     print "the dump_id is:", dump_id
     cursor.execute("""
