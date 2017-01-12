@@ -28,11 +28,12 @@ def make_syslog_entry(cursor, dump_id):
     # Database query to get the relevant record
     cursor.execute("""
         SELECT timestamp, client, server, dst_port, host, url, referer,
-            pe.sha1, pe.md5, file_size, trusted_av_labels, corrupt, file_type
+            pe.sha1, pe.md5, file_size, num_av_labels, corrupt, file_type
         FROM pe_dumps as pe JOIN ped_vts_mapping as pvm USING(dump_id),
             virus_total_scans as vts
         WHERE vts.vt_id = pvm.vt_id AND
-            dump_id = '%s'
+            (corrupt = 'false' OR num_av_labels IS NOT NULL) AND
+            dump_id = %s
         """ % (dump_id,))
     if cursor.rowcount == 0:
         return
