@@ -29,13 +29,13 @@ def send_file(md5):
     if vt_submissions == "manual":
         dir_path = MAN_DOWNLOAD_DIR
     else:
-        dir_path = "parsed/pe_files"
+        dir_path = LIVE_DOWNLOAD_DIR 
     
     # just a patch to old code...
     # we only submit the first file that matches
     # it is anyway highly unlikely that more than one would match
-    file_name = ""
-    file_path = ""
+    file_name = None
+    file_path = None
     for ext in vt_submissions_ext:
         for e in [ext.lower(),ext.upper()]:
             fn = md5 + "." + e
@@ -45,11 +45,12 @@ def send_file(md5):
                 file_path = fp
                 break;
 
-    print "VT file submission:", file_path
-    file_to_send = open(file_path, "rb").read()
-    files = [("file", file_name, file_to_send)]
-    json = postfile.post_multipart(host, selector, fields, files)
-    return json
+    if file_path and os.path.isfile(file_path):
+        print "VT file submission:", file_path
+        file_to_send = open(file_path, "rb").read()
+        files = [("file", file_name, file_to_send)]
+        json = postfile.post_multipart(host, selector, fields, files)
+        return json
 
 
 # Either a singe hash or a list of hashes (upto 25) can be passed
