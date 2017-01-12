@@ -1,16 +1,7 @@
-###########################################################################
-# Copyright (C) 2011-2013 Phani Vadrevu                                   #
-# pvadrevu@uga.edu                                                        #
-#                                                                         #
-# Distributed under the GNU Public License                                #
-# http://www.gnu.org/licenses/gpl.txt                                     #
-#                                                                         #
-# This program is free software; you can redistribute it and/or modify    #
-# it under the terms of the GNU General Public License as published by    #
-# the Free Software Foundation; either version 2 of the License, or       #
-# (at your option) any later version.                                     #
-#                                                                         #
-###########################################################################
+
+# Author: Phani Vadrevu <pvadrevu@uga.edu>
+
+import os.path
 import urllib
 import urllib2
 import random
@@ -34,24 +25,31 @@ def send_file(md5):
     selector = "https://www.virustotal.com/vtapi/v2/file/scan"
     fields = [("apikey", get_vt_key())]
 
-    file_to_send = None
+    dir_path = ""
     if vt_submissions == "manual":
-        file_name = "%s/%s.EXE" % (MAN_DOWNLOAD_DIR, md5)
-        print "File submission to VT (manual):", file_name
-        file_to_send = open(file_name, "rb").read()
-    elif vt_submissions == "live":
-        file_name = "parsed/captured_files/%s.exe" % (md5,)
-        print "File submission to VT:", file_name
-        file_to_send = open(file_name, "rb").read()
+        dir_path = MAN_DOWNLOAD_DIR
+    else:
+        dir_path = "parsed/pe_files"
+    
+    # just a patch to old code...
+    # we only submit the first file that matches
+    # it is anyway highly unlikely that more than one would match
+    file_name = ""
+    file_path = ""
+    for ext in vt_submissions_ext:
+        for e in [ext.lower(),ext.upper()]:
+            fn = md5 + "." + e
+            fp = os.path.join(dir_path,fn)
+            if os.path.isfile(fp):
+                file_name = fn
+                file_path = fp
+                break;
 
-    files = [("file", "%s.exe" % (md5,), file_to_send)]
+    print "VT file submission:", file_path
+    file_to_send = open(file_path, "rb").read()
+    files = [("file", file_name, file_to_send)]
     json = postfile.post_multipart(host, selector, fields, files)
-
-    if file_to_send:
-        file_to_send.close()
-
     return json
-
 
 
 # Either a singe hash or a list of hashes (upto 25) can be passed
