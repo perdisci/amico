@@ -42,7 +42,7 @@ def compute_features_hts(df):
     td = len(set(df['dump_id']))
     bd = len(set(df[df.navs==0]['dump_id']))
     md = len(set(df[df.tavs>FEAT_TAVS_THRESHOLD]['dump_id']))
-    sd = len(set(df[(df.tavs<=FEAT_TAVS_THRESHOLD) & (df.navs>FEAT_NAVS_THRESHOLD)]['dump_id']))
+    sd = len(set(df[df.navs>FEAT_NAVS_THRESHOLD]['dump_id']))
     th = len(set(df['sha1']))
     uh = len(set(df[df.navs.isnull()]['sha1']))
     
