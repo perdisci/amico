@@ -45,6 +45,10 @@ capture_file_types = ["EXE"]
 MAN_DOWNLOAD_DIR = "manual_downloads"
 LIVE_DOWNLOAD_DIR = "parsed/captured_files"
 
+# parameters for feature compuation based on past activity
+MAX_PAST_DUMPS = 100000 # used to only go back up to the past MAX_PAST_DUMPS dumps
+MAX_PAST_DAYS  = 30 # go back in time MAX_PAST_DAYS days max
+
 # When running AMICO under a SOCKS proxy, use these.
 # Else, have socks_proxy_host as "None"
 #socks_proxy_host = "localhost"

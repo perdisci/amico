@@ -1,6 +1,6 @@
 #! /usr/bin/python
 ###########################################################################
-# Copyright (C) 2012 Phani Vadrevu                                        #
+# Copyright (C) 2012 Phani Vadrevu and Roberto Perdisci                   #
 # pvadrevu@uga.edu                                                        #
 #                                                                         #
 # Distributed under the GNU Public License                                #
@@ -18,158 +18,90 @@ import re
 import psycopg2
 import util
 import sys
+import numpy as np
+import pandas as ps
+from datetime import timedelta
+from config import MAX_PAST_DUMPS, MAX_PAST_DAYS
 
 
-### ADDED BY ROBERTO
-MAX_PAST_DUMPS = 30000 # used to only look back in time within the past 10000 file dumps; this saves time but it's only a temporary hack!
-# TO DO: find a better way to optimize the feature measurement queries (aggregate multiple queries; use time and num of dumps to limit queries)!
 
 
-# TO DO: Modify this to count the VT entry at the correct time, use features table raw_ values --DONE--
-# TO DO: Don't let the hash_life_time and num_dumps_with_same_hash values be null
-# TO DO: Speed up the script
-# TO DO: How are null values of x_malware_ratio features being handled by WEKA?
+# TODO: Don't let the hash_life_time and num_dumps_with_same_hash values be null
+# TODO: Speed up the script
+# TODO: Verify how null values of x_malware_ratio features are handled by WEKA
+
+
 def insert_host_based_features(cursor, dump_id):
-    cursor.execute("""
-        SELECT host FROM pe_dumps
-        WHERE dump_id = %s""",
-        (dump_id, ))
+    """ Computes hostname-based features for a given download
+    
+    Arguments:
+        cursor: DB cursort from existing DB connection
+        dump_id: id of download to be classified 
+
+    """
+
+    # also query for timestamp, so we can use to limit how much we go back in time!
+    query = " SELECT host,DATE(timestamp) FROM pe_dumps WHERE dump_id = %s " 
+
+    cursor.execute(query,(dump_id, ))
     row = cursor.fetchone()
-    if row is not None:
-        host = row[0]
-    else:
+    if not row:
         return
 
-    cursor.execute("""
-        SELECT COUNT(DISTINCT dump_id)
-        FROM pe_dumps AS pe
-        WHERE pe.host = %s AND
-            pe.corrupt = 'f' AND
-            pe.dump_id < %s AND pe.dump_id > %s """,
-        (host, dump_id, dump_id-MAX_PAST_DUMPS))
-    host_total_downloads = cursor.fetchone()[0]
+    (host,date) = row
 
-    # Disabled vt_month_shelf due to the 403 error from VT
-    #cursor.execute("""
-    #    SELECT count(distinct dump_id) from pe_dumps as pe JOIN 
-    #    weka_features as f using (dump_id)
-    #    where f.raw_dump_num_av_labels = 0 and f.vt_month_shelf = 't' and 
-    #    pe.host = %s and pe.dump_id < %s """,
-    #    (host, dump_id))
-    cursor.execute("""
-        SELECT COUNT(DISTINCT dump_id)
-        FROM pe_dumps AS pe JOIN
-            ped_vts_mapping AS pvm USING (dump_id),
-            virus_total_scans AS vts
-        WHERE vts.num_av_labels = 0 AND
-            pe.corrupt = 'f' AND
-            pe.host = %s AND
-            pe.dump_id < %s AND pe.dump_id > %s AND
-            vts.vt_id = pvm.vt_id""",
-        (host, dump_id, dump_id-MAX_PAST_DUMPS))
-    host_benign_downloads = cursor.fetchone()[0]
+    query = """
+        SELECT dump_id,pe.sha1,trusted_av_labels,num_av_labels
+        FROM pe_dumps AS pe 
+        JOIN ped_vts_mapping AS pvm 
+          USING(dump_id)
+        JOIN virus_total_scans AS vts
+          USING(vt_id)
+        WHERE pe.corrupt = 'f' AND
+              pe.host = %s AND
+              pe.dump_id < %s AND pe.dump_id > %s AND
+              pe.timestamp > %s """
+    
+    cursor.execute(query,(host, dump_id, dump_id-MAX_PAST_DUMPS, date-timedelta(days=MAX_PAST_DAYS)))
+    tuples = cursor.fetchall()
 
-    cursor.execute("""
-        SELECT COUNT(DISTINCT dump_id)
-        FROM pe_dumps AS pe JOIN
-            ped_vts_mapping AS pvm USING (dump_id),
-            virus_total_scans AS vts
-        WHERE vts.trusted_av_labels > 1 AND
-            pe.corrupt = 'f' AND
-            pe.host = %s AND
-            pe.dump_id < %s AND pe.dump_id > %s AND
-            vts.vt_id = pvm.vt_id""",
-        (host, dump_id, dump_id-MAX_PAST_DUMPS))
-    host_malware_downloads = cursor.fetchone()[0]
+    if not tuples:
+        return 
+    
+    # make the results into a pandas data frame
+    df = ps.DataFrame.from_records(tuples)
+    df.columns = ['dump_id','sha1','tavs','navs']
 
-    cursor.execute("""
-        SELECT COUNT(DISTINCT dump_id)
-        FROM pe_dumps AS pe JOIN
-            ped_vts_mapping AS pvm USING (dump_id),
-            virus_total_scans AS vts
-        WHERE vts.num_av_labels > 1 AND
-            pe.corrupt = 'f' AND
-            pe.host = %s AND
-            pe.dump_id < %s AND pe.dump_id > %s AND
-            vts.vt_id = pvm.vt_id""",
-        (host, dump_id, dump_id-MAX_PAST_DUMPS))
-    host_suspicious_downloads = cursor.fetchone()[0]
+    tavs_threshold = 1
+    navs_threshold = 0
+    host_total_downloads = len(set(df['dump_id']))
+    host_benign_downloads = len(set(df[df.navs==0]['dump_id']))
+    host_malware_downloads = len(set(df[df.tavs>tavs_threshold]['dump_id']))
+    host_suspicious_downloads = len(set(df[(df.tavs<=tavs_threshold) & (df.navs>navs_threshold)]['dump_id']))
+    host_total_hashes = len(set(df['sha1']))
+    host_unknown_hashes = len(set(df[df.navs.isnull()]['sha1']))
 
-    if host_total_downloads == 0:
-        host_benign_ratio = None
-        host_malware_ratio = None
-        host_suspicious_ratio = None
-    else:
-        host_benign_ratio = float(host_benign_downloads) / host_total_downloads
-        host_malware_ratio = float(host_malware_downloads) / host_total_downloads
-        host_suspicious_ratio = float(host_suspicious_downloads) / host_total_downloads
+    host_benign_ratio = float(host_benign_downloads)/host_total_downloads
+    host_malware_ratio = float(host_malware_downloads)/host_total_downloads
+    host_suspicious_ratio = float(host_suspicious_downloads)/host_total_hashes
+    host_unknown_hash_ratio = float(host_unknown_hashes)/host_total_hashes
 
-    # The averages are over distinct sha1s
-    cursor.execute("""
-        SELECT AVG(num_av_labels), AVG(trusted_av_labels)
-        FROM
-            (SELECT pe.sha1, MAX(dump_id) AS max_id
-            FROM pe_dumps AS pe
-            WHERE pe.host = %s AND
-                pe.dump_id < %s AND pe.dump_id > %s AND
-                pe.corrupt = 'f' GROUP BY pe.sha1) as a
-            JOIN
-            (SELECT p.sha1, num_av_labels, trusted_av_labels, dump_id
-            FROM pe_dumps AS p JOIN
-                ped_vts_mapping as pvm USING (dump_id),
-                virus_total_scans as vts
-            WHERE pvm.vt_id = vts.vt_id AND
-                p.host = %s AND
-                dump_id < %s AND dump_id > %s AND
-                p.corrupt='f') as b
-            ON a.max_id = b.dump_id
-        WHERE num_av_labels IS NOT NULL""",
-    (host, dump_id, dump_id-MAX_PAST_DUMPS, host, dump_id, dump_id-MAX_PAST_DUMPS))
-    if cursor.rowcount == 0:
-        host_avg_av_labels = None
-        host_avg_trusted_labels = None
-    else:
-        host_avg_av_labels, host_avg_trusted_labels = cursor.fetchone()
+    host_avg_av_labels = None
+    host_avg_trusted_labels = None
 
-    # the oldest scan report is used to get the # of unknown hashes
-    # to remove any bias due to VT submissions
-    cursor.execute("""
-        SELECT COUNT(DISTINCT b.sha1)
-        FROM
-            (SELECT pe.sha1, MIN(dump_id) AS min_id
-            FROM pe_dumps AS pe
-            WHERE pe.host = %s AND
-                pe.dump_id < %s AND pe.dump_id > %s AND
-                pe.corrupt = 'f' GROUP BY pe.sha1) as a
-            JOIN
-            (SELECT p.sha1, num_av_labels, trusted_av_labels, dump_id
-            FROM pe_dumps AS p JOIN
-                ped_vts_mapping as pvm USING (dump_id),
-                virus_total_scans as vts
-            WHERE pvm.vt_id = vts.vt_id AND
-                p.host = %s AND
-                dump_id < %s AND dump_id > %s AND
-                p.corrupt='f') as b
-            ON a.min_id = b.dump_id
-        WHERE num_av_labels IS NULL""",
-    (host, dump_id, dump_id-MAX_PAST_DUMPS, host, dump_id, dump_id-MAX_PAST_DUMPS))
-    host_unknown_hashes = cursor.fetchone()[0]
+    sha1_nav_labels = []
+    sha1_tav_labels = []
+    for (sha,dfgroup) in df.groupby('sha1'):
+        d = dfgroup.sort_values('dump_id',ascending=False)
+        if d['navs'].iat[0] != None and not np.isnan(d['navs'].iat[0]):
+            sha1_nav_labels.append(d['navs'].iat[0])
+            sha1_tav_labels.append(d['tavs'].iat[0])
+    if(len(sha1_nav_labels) > 0):
+        host_avg_av_labels = np.mean(sha1_nav_labels)
+        host_avg_trusted_labels = np.mean(sha1_tav_labels)
 
-    cursor.execute("""
-        SELECT COUNT(DISTINCT pe.sha1)
-        FROM pe_dumps AS pe
-        WHERE pe.host = %s AND
-            pe.corrupt = 'f' AND
-            pe.dump_id < %s AND pe.dump_id > %s """,
-        (host, dump_id, dump_id-MAX_PAST_DUMPS))
-    host_total_hashes = cursor.fetchone()[0]
-    if host_total_hashes != 0:
-        host_unknown_hash_ratio = float(host_unknown_hashes) / host_total_hashes
-    else:
-        host_unknown_hash_ratio = None
 
-    try:
-        cursor.execute("""
+    query = """
                 UPDATE weka_features set host_benign_downloads = %s,
                  host_malware_downloads = %s,
                  host_suspicious_downloads = %s,
@@ -182,19 +114,22 @@ def insert_host_based_features(cursor, dump_id):
                  host_unknown_hashes = %s,
                  host_total_hashes = %s,
                  host_unknown_hash_ratio = %s
-                 where dump_id = %s """,
-                (host_benign_downloads, host_malware_downloads,
+                 where dump_id = %s """
+
+    try:
+        cursor.execute(query,(host_benign_downloads, host_malware_downloads,
                  host_suspicious_downloads,
                  host_total_downloads, host_malware_ratio,
                  host_suspicious_ratio,
                  host_benign_ratio,
                  host_avg_av_labels, host_avg_trusted_labels,
                  host_unknown_hashes, host_total_hashes,
-                 host_unknown_hash_ratio, dump_id))
+                 host_unknown_hash_ratio, dump_id ))
     except Exception as e:
         print e
-        print "Could not insert host based features for the dump #", dump_id
-
+        print "Could not insert host based features for the dump #", dump_id    
+    
+        
 def insert_twold_based_features(cursor, dump_id):
     cursor.execute("""
            SELECT host FROM pe_dumps where
