@@ -92,11 +92,14 @@ def manual_download(captured_sha1):
     client = row[4]
     server = row[5]
 
-    if host is None:
-        host = server
-    ordered_host = util.reorder_domain(host)
-    full_url = "http://" + ordered_host + url
-    #print full_url
+    full_url = "http://"
+    ordered_host = server # if host is null, we use ther server IP
+    if host:
+        ordered_host = util.reorder_domain(host)
+    full_url += ordered_host
+    if url:
+        full_url += url
+    print "Starting manual download from :", full_url
 
     # Prepare the urllib2 request
     req = urllib2.Request(full_url)
