@@ -92,11 +92,13 @@ def insert_host_based_features(cursor, dump_id):
     sha1_nav_labels = []
     sha1_tav_labels = []
     for (sha,dfgroup) in df.groupby('sha1'):
+        # sort to get only the most recent number of av labels for a given sha1
         d = dfgroup.sort_values('dump_id',ascending=False)
         if d['navs'].iat[0] != None and not np.isnan(d['navs'].iat[0]):
             sha1_nav_labels.append(d['navs'].iat[0])
             sha1_tav_labels.append(d['tavs'].iat[0])
     if(len(sha1_nav_labels) > 0):
+        # average over different sha1s
         host_avg_av_labels = np.mean(sha1_nav_labels)
         host_avg_trusted_labels = np.mean(sha1_tav_labels)
 
