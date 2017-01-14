@@ -46,10 +46,13 @@ def compute_features_hts(df):
     th = len(set(df['sha1']))
     uh = len(set(df[df.navs.isnull()]['sha1']))
     
-    br = float(bd)/td
-    mr = float(md)/td
-    sr = float(sd)/td
-    ur = float(uh)/th
+    br = mr = sr = ur = None
+    if td > 0:
+        br = float(bd)/td
+        mr = float(md)/td
+        sr = float(sd)/td
+    if th > 0 :
+        ur = float(uh)/th
     
     avg_navs = None
     avg_tavs = None
