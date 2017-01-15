@@ -1,5 +1,5 @@
 OBJ = file_dump.o search.o lru-cache.o seq_list.o
-CFLAGS = -Wall -g
+CFLAGS = -Wall -O3
 CC = gcc
 INCLUDE =
 LIB = -L /usr/local/lib/ -lpcap -lpthread
