@@ -28,6 +28,7 @@ Notice that code in other directories, such as "tags/amico-1.0" and "branches/ex
 
 
 ## News ##
+  * [01/17/2017] Written [some guidelines](https://amico-security.blogspot.com/2017/01/installing-pfring.html) on how to install pf_ring and ZC drivers
   * [01/11/2016] Enabled submission of file types other than EXE to VirusTotal (in the experimental branch only).
   * [04/29/2015] Improved [experimental branch code](https://github.com/perdisci/amico/tree/experimental), and tested capture and classification of APKs and JARs in a large network.
   * [03/27/2015] All code in the master branch has been released under **BSD license**.
