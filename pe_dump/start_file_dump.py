@@ -26,5 +26,5 @@ if len(manual_download_ip) > 0:
 bpf_filter += "\""
 
 subprocess.call("""
-        sudo ./file_dump -i %s -d dumps/ -f %s """ %
+        ./file_dump -i %s -d dumps/ -f %s """ %
             (nic, bpf_filter), shell=True)
