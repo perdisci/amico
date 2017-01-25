@@ -121,6 +121,7 @@ struct tcp_header {
 #define FLOW_HTTP_RESP_MAGIC_FOUND 6
 #define FLOW_HTTP_RESP_MAGIC_NOT_FOUND -6
 #define FLOW_FILE_DUMP 7
+#define FLOW_FILE_RESET -7
 
 #define FILE_FOUND 1 // Possible interesting file found 
 #define FILE_NOT_FOUND -1 // The HTTP response does not seem to carry an interesting file
@@ -772,18 +773,36 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
         }
         #endif
 
-        if(tcp->th_flags & TH_RST)
+        if(tcp->th_flags & TH_RST) {
+            tflow->flow_state = FLOW_FILE_RESET;
             tflow->flow_closed = TRUE; // the flow is reset, abandon it!
+	}
 
         if(flow_direction == SC_DIR) {
             // printf("SC-FIN\n");
             tflow->server_fin = TRUE;
+
+            if(tcp->th_flags & TH_FIN) {
+                if(payload_size > 0) {
+                    // the FIN packet may contain data; therefore, we need to update the flow's payload
+                    update_flow(tflow, tcp, payload, payload_size);
+                    // record what was the last file byte in the S->C half flow (from the SEQ number in server's FIN packet)
+                    seq_list_insert(tflow->sc_seq_list, ntohl(tcp->th_seq), payload_size); 
+                }
+            }
         }
 
         if(flow_direction == CS_DIR) {
             // printf("CS-FIN\n");
             tflow->client_fin = TRUE;
+
+            if(tcp->th_flags & TH_FIN) { 
+                // we assume the server is not going to send more data after client sends a FIN packet
+                // record what was the last expected file byte from the server (from the ACK number in client's FIN packet)
+                seq_list_insert(tflow->sc_seq_list, ntohl(tcp->th_ack)-1, 0); // the -1 is due to how seq# are defined at FIN-ACK
+            }
         }
+
 
         if(tflow->client_fin && tflow->server_fin)
             tflow->flow_closed = TRUE; // the flow is closed!
@@ -791,8 +810,8 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
 
         if(tflow->flow_closed) { //////////// FLOW IS CLOSED! ////////////////
 
-        // if this flow contains an interesting file, dump it
-        if(tflow->flow_state == FLOW_HTTP_RESP_MAGIC_FOUND) {
+          // if this flow contains an interesting file, dump it
+          if(tflow->flow_state == FLOW_HTTP_RESP_MAGIC_FOUND) {
 
             #ifdef FILE_DUMP_DEBUG
             if(debug_level >= VERY_VERBOSE) {
@@ -805,37 +824,12 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
             }
             #endif
 
-            if(flow_direction == SC_DIR && (tcp->th_flags & TH_FIN)) {
-                if(payload_size > 0) {
-                    // the FIN packet may contain data; therefore, we need to update the flow's payload
-                    update_flow(tflow, tcp, payload, payload_size);
-                    // record what was the last file byte in the S->C half flow (from the SEQ number in server's FIN packet)
-                    seq_list_insert(tflow->sc_seq_list, ntohl(tcp->th_seq), payload_size); 
-                }
-            }
-            else if(flow_direction == CS_DIR && (tcp->th_flags & TH_FIN)) { 
-                // we assume the server is not going to send more data after client sends a FIN packet
-                // record what was the last expected file byte from the server (from the ACK number in client's FIN packet)
-                seq_list_insert(tflow->sc_seq_list, ntohl(tcp->th_ack)-1, 0); // the -1 is due to how seq# are defined at FIN-ACK
-            }
 
             dump_pe(tflow); // dump the reconstructed file
-            remove_flow(lruc, tflow); // evict closed TCP flow from cache
 
-        }
-        else { // if there was not file dump being tracked...
-            
-            // remove this flow from the cache of open tcp flows
-            #ifdef FILE_DUMP_DEBUG
-            if(debug_level >= VERY_VERBOSE) {
-                printf("TCP flow is being removed from the cache\n");
-                fflush(stdout);
-            }
-            #endif
+          }
 
-            remove_flow(lruc, tflow); // evict closed TCP flow from cache
-        }
-
+          remove_flow(lruc, tflow); // evict closed TCP flow from cache
 
         } //////////// END FLOW IS CLOSED! ////////////////
 
@@ -1360,7 +1354,7 @@ int is_complete_http_resp_header(const struct tcp_flow *tflow) {
     if(debug_level >= VERY_VERY_VERBOSE) {
         printf("Checking if complete HTTP header\n");
         fflush(stdout);
-        printf("lenght of tflow->sc_payload = %d, tflow->sc_payload_size = %d \n", strlen(tflow->sc_payload),tflow->sc_payload_size);
+        printf("lenght of tflow->sc_payload = %zu, tflow->sc_payload_size = %d \n", strlen(tflow->sc_payload),tflow->sc_payload_size);
         fflush(stdout);
     }
     #endif
