@@ -792,10 +792,13 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
             }
         }
 
+
         if(flow_direction == CS_DIR) {
             // printf("CS-FIN\n");
             tflow->client_fin = TRUE;
 
+            // TODO(Roberto): double-check whether the behavior coded below is correct
+            // what if the server sends more data, before its own FIN?
             if(tcp->th_flags & TH_FIN) { 
                 // we assume the server is not going to send more data after client sends a FIN packet
                 // record what was the last expected file byte from the server (from the ACK number in client's FIN packet)
