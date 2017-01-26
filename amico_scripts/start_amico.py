@@ -1,8 +1,9 @@
 #!/usr/bin/python
 #
 ###########################################################################
-# Copyright (C) 2014 Phani Vadrevu                                        #
+# Copyright (C) 2014 Phani Vadrevu and Roberto Perdisci                   #
 # pvadrevu@uga.edu                                                        #
+# perdisci@uga.edu                                                        #
 #                                                                         #
 # Distributed under the GNU Public License                                #
 # http://www.gnu.org/licenses/gpl.txt                                     #
@@ -20,6 +21,7 @@ import subprocess
 import hashlib
 import time
 import traceback
+from cachetools import TTLCache
 
 from config import whitelist_domains, vt_submissions as vts_config
 from vt_submit import vt_submissions_func
@@ -40,6 +42,8 @@ FILES_DIR = "parsed/captured_files/"
 MD_TIMEOUT = 180
 VT_TIMEOUT = 60
 
+md5host_cache = TTLCache(100000,ttl=60*10)
+MAX_MD5_CACHE_COUNT = 1
 
 # Makes a function call in a separate process
 # and makes sure it times out after 'timeout' seconds
@@ -86,19 +90,41 @@ def process_file(raw_path, file_name):
 
     # If we are really dealing with a PE file
     sha1, md5, file_size = get_file_hashes(file_path)
-    dump_id, corrupt_pe = db_file_dumps(raw_path, sha1, md5, file_size, file_type)
+    dump_id, corrupt_pe, host = db_file_dumps(raw_path, sha1, md5, file_size, file_type)
 
-    # query VT
-    Process(target=process_timeout,
-        args=(db_virus_total, (dump_id,), VT_TIMEOUT)).start()
-    if vts_config == "manual": # attempt to re-download the file "manually"
+    # check if we have already recently classified the same md5 dump from the same host
+    skip_classification = False
+    score = None
+    cache_key = md5+'-'+host
+    if cache_key in md5host_cache.keys():
+        md5host_cache[cache_key]['count'] += 1
+        if md5host_cache[cache_key]['count'] > MAX_MD5_CACHE_COUNT:
+            # do not classify again! retrieve cached score
+            skip_classification = True
+            score = md5host_cache[cache_key]['score'] # get the last cached score
+            print "CACHE: will use previous score : %s %s %s %s" %(dump_id,md5,host,score)
+    else:
+        md5host_cache[cache_key] = {'count':1, 'score':None}
+
+    if not skip_classification and not corrupt_pe:
+
+        ip2asn(dump_id)
+        get_feature_vector(dump_id,file_type)
+        score = classify_dump(dump_id)
+        md5host_cache[cache_key]['score'] = score # update cached score
+
+        # query VT
         Process(target=process_timeout,
-            args=(manual_download, sha1, MD_TIMEOUT)).start()
+            args=(db_virus_total, (dump_id,), VT_TIMEOUT)).start()
+        if vts_config == "manual": # attempt to re-download the file "manually"
+            Process(target=process_timeout,
+                args=(manual_download, sha1, MD_TIMEOUT)).start()
 
-    ip2asn(dump_id)
-    get_feature_vector(dump_id,file_type)
-    classify_dump(dump_id)
-    Process(target=db_syslog, args=(dump_id,)).start()
+    if not corrupt_pe:
+        if not score: print "ERROR : None score : this should not happen! dump_id=", dump_id
+        print "Syslog score = %s (dump_id=%s)" % (score, dump_id)
+        Process(target=db_syslog, args=(dump_id,score)).start()
+
     sha1_path = os.path.join(
             FILES_DIR, "%s.%s" % (sha1,file_extension))
     md5_path = os.path.join(

@@ -103,6 +103,8 @@ def classify_dump(dump_id):
     subprocess.call("rm test.arff", shell=True)
     subprocess.call("rm test.result", shell=True)
 
+    return score
+
 if __name__ == "__main__":
     dump_id = int(sys.argv[1])
     #print_arff(dump_id)  # For testing

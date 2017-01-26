@@ -121,7 +121,7 @@ def db_file_dumps(file_path, sha1, md5, file_size, file_type):
     fileHandle.close()
     cursor.close()
     conn.close()
-    return dump_id, corrupt_pe
+    return dump_id, corrupt_pe, host
 
 
 if __name__ == "__main__":
