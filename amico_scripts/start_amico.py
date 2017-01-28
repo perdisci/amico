@@ -36,7 +36,7 @@ from classify_dump import classify_dump
 from db_syslog import db_syslog
 
 WAIT_TIME = 1
-DUMP_DIR = "../pe_dump/dumps"
+DUMP_DIR = "../file_dump/dumps"
 RAW_DIR = "parsed/raw_files/"
 FILES_DIR = "parsed/captured_files/"
 MD_TIMEOUT = 180
