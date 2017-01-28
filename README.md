@@ -22,7 +22,7 @@ If you are deploying AMICO in a large _university-like campus network_ and would
 
 
 ## LICENSING ##
-The code under the "master" branch is released under BSD license. Please refer to the COPYING file under the master branch for details.
+The code under the "older_code" branch is released under BSD license. Please refer to the COPYING file under that branch for details.
 
 Notice that code in other directories, such as "tags/amico-1.0" and "branches/experimental", is currently released under GNU GPL.
 
