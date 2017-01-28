@@ -45,6 +45,9 @@ VT_TIMEOUT = 60
 md5host_cache = TTLCache(100000,ttl=60*10)
 MAX_MD5_CACHE_COUNT = 1
 
+hostcs_cache = TTLCache(100000,ttl=60*10)
+MAX_HOSTCS_CACHE_COUNT = 3
+
 # Makes a function call in a separate process
 # and makes sure it times out after 'timeout' seconds
 def process_timeout(func, func_args, timeout):
@@ -59,10 +62,12 @@ def is_whitelisted(file_name):
         for _ in xrange(6):
             line = f.readline()
             if line.startswith("% Host:"):
-                for domain in whitelist_domains:
-                    if line.rstrip().endswith(domain):
-                        return True
-                break
+                tok = line.split(':')
+                if len(tok)>1:
+                    host = tok[1].strip()
+                    for domain in whitelist_domains:
+                        if host == domain or host.endswith('.'+domain):
+                            return True
     return False
 
 
@@ -90,28 +95,49 @@ def process_file(raw_path, file_name):
 
     # If we are really dealing with a PE file
     sha1, md5, file_size = get_file_hashes(file_path)
-    dump_id, corrupt_pe, host = db_file_dumps(raw_path, sha1, md5, file_size, file_type)
+    dump_id, corrupt_pe, host, client, server = db_file_dumps(raw_path, sha1, md5, file_size, file_type)
 
-    # check if we have already recently classified the same md5 dump from the same host
     skip_classification = False
     score = None
-    cache_key = md5+'-'+host
-    if cache_key in md5host_cache.keys():
-        md5host_cache[cache_key]['count'] += 1
-        if md5host_cache[cache_key]['count'] > MAX_MD5_CACHE_COUNT:
+
+    # check if we have already recently classified the same md5 dump from the same host
+    md5_cache_key = md5
+    if host is not None:
+        md5_cache_key += '-'+host
+    if md5_cache_key in md5host_cache.keys():
+        md5host_cache[md5_cache_key]['count'] += 1
+        if md5host_cache[md5_cache_key]['count'] > MAX_MD5_CACHE_COUNT:
             # do not classify again! retrieve cached score
             skip_classification = True
-            score = md5host_cache[cache_key]['score'] # get the last cached score
-            print "CACHE: will use previous score : %s %s %s %s" %(dump_id,md5,host,score)
-    else:
-        md5host_cache[cache_key] = {'count':1, 'score':None}
+            score = md5host_cache[md5_cache_key]['score'] # get the last cached score
+            print "MD5 CACHE: will use previous score : %s %s %s %s" %(dump_id,md5,host,score)
+    elif not corrupt_pe:
+        md5host_cache[md5_cache_key] = {'count':1, 'score':None}
 
-    if not skip_classification and not corrupt_pe:
+    # check if we have already recently classified several dumps from the same host,client,server
+    hostcs_cache_key = ''
+    if host is not None:
+        hostcs_cache_key += host
+    hostcs_cache_key += '-'+client
+    hostcs_cache_key += '-'+server
+    if hostcs_cache_key in hostcs_cache.keys():
+        hostcs_cache[hostcs_cache_key]['count'] += 1
+        if hostcs_cache[hostcs_cache_key]['count'] > MAX_HOSTCS_CACHE_COUNT:
+            # do not classify again! retrieve cached score
+            skip_classification = True
+            if score is None:
+                score = hostcs_cache[hostcs_cache_key]['score'] # get the last cached score
+                print "HOSTCS CACHE: will use previous score : %s %s %s %s" %(dump_id,host,server,score)
+    elif not corrupt_pe:
+        hostcs_cache[hostcs_cache_key] = {'count':1, 'score':None}
+    
 
+    if not corrupt_pe and (not skip_classification or score is None):
         ip2asn(dump_id)
         get_feature_vector(dump_id,file_type)
         score = classify_dump(dump_id)
-        md5host_cache[cache_key]['score'] = score # update cached score
+        md5host_cache[md5_cache_key]['score'] = score # update cached score
+        hostcs_cache[hostcs_cache_key]['score'] = score # update cached score
 
         # query VT
         Process(target=process_timeout,
@@ -121,7 +147,7 @@ def process_file(raw_path, file_name):
                 args=(manual_download, sha1, MD_TIMEOUT)).start()
 
     if not corrupt_pe:
-        if not score: print "ERROR : None score : this should not happen! dump_id=", dump_id
+        if score is None: print "ERROR : None score : this should not happen! dump_id=", dump_id
         print "Syslog score = %s (dump_id=%s)" % (score, dump_id)
         Process(target=db_syslog, args=(dump_id,score)).start()
 
