@@ -1,10 +1,12 @@
 # Overview #
 
-**AMICO** is a malware download classification tool that can be deployed in large networks. It reconstructs executable files (Windows PE files, but now also JARs, DMGs, APKs, and ELFs) from the network traffic and determines if they are malicious or not based on their _provenance information_.
+**AMICO** is a malware download classification tool that can be deployed in large networks. It reconstructs executable files (e.g., EXE, DLL, DMG, APK, JAR, etc.) from the network traffic and determines if they are malicious or not based on their _provenance information_. 
 
-To classify an executable file download event, AMICO looks at **who** is downloading **what** and from **where**, rather than analyzing the content of the downloaded files.
+To classify a file download event, AMICO looks at **who** is downloading **what** and from **where**, rather than analyzing the content of the downloaded files.
 
 For more technical information, please refer to this [ESORICS 2013 research paper](http://www.perdisci.com/publications/publication-files/amico.pdf)
+
+**Code**: The latest code, which reconstructs and classifies file dumps other than Windows PE executables, is in the `dev` branch (the `older_code` branch contains the original code dedicated to reconstructing only Windows PE files).
 
 For more information on how to use and deploy AMICO, please go through the Wiki pages. This is an initial release of the system and we will keep refining the code and documentation. Please open a new Issue if you experience any problems.
 
