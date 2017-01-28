@@ -1,0 +1,65 @@
+
+Usage: ./file_dump [-i NIC] [-r pcap_file] [-A] -d dump_dir [-f "pcap_filter"] [-L lru_cache_size] [-K max_dump_file_size (KB)] [-D debug_level] 
+
+         -i : Use to specify network interface (e.g., -i eth0)
+         -r : Read from .pcap file instead of NIC (e.g., -r file.pcap)
+         -A : If specified, this flag will turn off the on-the-fly srcIP anonymization
+         -d : Director where raw HTTP respnoses containing reconstructed files are stored (e.g., -d ./dumps
+         -f : Specify BPF filter (e.g., -f "tcp port 80")
+         -L : Change LRU cache size (default = 10000 entries)
+         -K : Change max accepted reconstructed file size, in KB (e.g., -K 1024)
+         -D : Specify debug_level (value from 0-4)
+         -J : extract JAR/APK files
+         -E : extract ELF files
+         -G : extract DMG files
+         -Z : extract ZIP files
+         -R : extract RAR files
+         -P : extract PDF files
+         -M : extract MS DOC files
+
+====
+
+NOTE: the IPs below have not been updated in a while...
+
+Suggested BPF filter to reduce load on file_dump packet analysis:
+
+BPF FILTER = tcp and not (net 69.171.224.0/20 or net 66.220.152.0/21 or net 74.125.0.0/16 or net 220.181.111.0/24 or net 123.125.114.0/24 or net 199.59.148.0/22 or net 65.54.94.0/23 or net 65.55.160.0/19 or net 65.55.192.0/18 or net 66.135.192.0/19 or net 157.166.224.0/20 or net 15.192.0.0/16 or net 143.166.0.0/17 or net 17.148.0.0/14 or net 192.150.16.0/23)
+
+
+Facebook
+69.171.224.0/20
+66.220.152.0/21
+
+Google/Youtube
+74.125.0.0/16
+
+Baidu
+220.181.111.0/24 
+123.125.114.0/24
+
+Twitter
+199.59.148.0/22
+
+Microsoft/MSN/Live.com/Bing
+65.54.94.0/23
+65.55.160.0/19
+65.55.192.0/18
+
+Ebay
+66.135.192.0/19
+
+CNN
+157.166.224.0/20
+
+HP
+15.192.0.0/16
+
+DELL
+143.166.0.0/17
+
+APPLE
+17.148.0.0/14
+
+ADOBE
+192.150.16.0/23
+

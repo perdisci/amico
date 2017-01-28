@@ -1,0 +1,4 @@
+config.py
+file_dump
+*.o
+dumps/
