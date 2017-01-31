@@ -113,13 +113,13 @@ def insert_hts_based_features(cursor, dump_id):
     cursor.execute(query,(host, twold_like, server, dump_id, dump_id-MAX_PAST_DUMPS, date-timedelta(days=MAX_PAST_DAYS)))
     tuples = cursor.fetchall()
 
-    if not tuples:
-        return 
-    
     # make the results into a pandas data frame
-    df = ps.DataFrame.from_records(tuples)
-    df.columns = ['dump_id','sha1','host','server','tavs','navs']
-
+    if not tuples:
+        df = ps.DataFrame(index=[], columns=['dump_id','sha1','host','server','tavs','navs'])
+    else:    
+        df = ps.DataFrame.from_records(tuples)
+        df.columns = ['dump_id','sha1','host','server','tavs','navs']
+    
     ### compute twold-based features
     df_twold = df[df['host'].str.startswith(twold)==True]
     twold_v = compute_features_hts(df_twold)
@@ -723,7 +723,7 @@ def get_feature_vector(dump_id, file_type):
     print "Done inserting features for dump_id: ", dump_id
 
 if __name__ == "__main__":
-    if len(sys.argv) == 2:
-        get_feature_vector(sys.argv[1])
+    if len(sys.argv) == 3:
+        get_feature_vector(int(sys.argv[1]),sys.argv[2])
     else:
         print "Incorrect number of arguments!!"
