@@ -78,8 +78,6 @@ def classify_dump(dump_id):
             "-l %s -p 1,58,59 -distribution -T test.arff "
             "> test.result" % (model_file,), shell=True)
 
-    conn = util.connect_to_db()
-    cursor = conn.cursor()
 
     score = None
     with open('test.result', 'r') as f:
@@ -90,9 +88,18 @@ def classify_dump(dump_id):
                         score = word.split(',')[0]
                         if score.startswith('*'):
                             score = score[1:]
+    subprocess.call("rm test.arff", shell=True)
+    subprocess.call("rm test.result", shell=True)
 
     print "AMICO Score:", score
+    update_score(dump_id,score)
 
+    return score
+
+
+def update_score(dump_id,score):
+    conn = util.connect_to_db()
+    cursor = conn.cursor()
     cursor.execute("""
             DELETE FROM amico_scores
             WHERE dump_id = %s""",
@@ -100,10 +107,7 @@ def classify_dump(dump_id):
     cursor.execute("INSERT INTO amico_scores VALUES "
                    "(%s, %s)", (dump_id, score))
 
-    subprocess.call("rm test.arff", shell=True)
-    subprocess.call("rm test.result", shell=True)
 
-    return score
 
 if __name__ == "__main__":
     dump_id = int(sys.argv[1])

@@ -32,7 +32,7 @@ from db_virus_total import db_virus_total
 from manual_download import manual_download
 from ip2asn import ip2asn
 from get_feature_vector import get_feature_vector
-from classify_dump import classify_dump
+from classify_dump import classify_dump,update_score
 from db_syslog import db_syslog
 
 WAIT_TIME = 1
@@ -148,6 +148,8 @@ def process_file(raw_path, file_name):
 
     if not corrupt_pe:
         if score is None: print "ERROR : None score : this should not happen! dump_id=", dump_id
+	if skip_classification and not score is None:
+            update_score(dump_id,score)
         print "Syslog score = %s (dump_id=%s)" % (score, dump_id)
         Process(target=db_syslog, args=(dump_id,score)).start()
 
