@@ -26,9 +26,6 @@ If you are deploying AMICO in a large _university-like campus network_ and would
 ## LICENSING ##
 The code under the "older_code" branch is released under BSD license. Please refer to the COPYING file under that branch for details.
 
-Notice that code in other directories, such as "tags/amico-1.0" and "branches/experimental", is currently released under GNU GPL.
-
-
 ## News ##
   * [01/17/2017] Written [some guidelines](https://amico-security.blogspot.com/2017/01/installing-pfring.html) on how to install pf_ring and ZC drivers
   * [01/11/2016] Enabled submission of file types other than EXE to VirusTotal (in the experimental branch only).
