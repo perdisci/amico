@@ -148,7 +148,7 @@ def process_file(raw_path, file_name):
 
     if not corrupt_pe:
         if score is None: print "ERROR : None score : this should not happen! dump_id=", dump_id
-	if skip_classification and not score is None:
+        if skip_classification and not score is None:
             update_score(dump_id,score)
         print "Syslog score = %s (dump_id=%s)" % (score, dump_id)
         Process(target=db_syslog, args=(dump_id,score)).start()
