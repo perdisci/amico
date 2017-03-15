@@ -54,7 +54,7 @@ def make_syslog_entry(cursor, dump_id, score):
 
     if log_data:
         #print log_data
-        entry = ("PE file download -- timestamp: %s, client_ip: %s, server_ip:"
+        entry = ("file download -- timestamp: %s, client_ip: %s, server_ip:"
         " %s, server_port: %s, host: %s, url: %s, referrer: %s, sha1: %s, md5:"
         " %s, file_size: %s, av_labels: %s, corrupt: %s, file_type: %s, amico_score: %s" %
             tuple(log_data))
