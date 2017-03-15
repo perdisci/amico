@@ -39,7 +39,8 @@ def connect_to_db():
 # the TLD comes first. Eg: com.google.www
 def reorder_domain(host):
     if host is None:
-        return
+        return None
+
     try:
         host = host.split(':')[0]  # in case host string contains port
         ipreg = re.compile("[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$")
@@ -76,15 +77,35 @@ def extract_extension(url):
         return None
 
 
-def extract_twold(url):
-    etld_obj = etld.etld()
-    registered = ''
-    suffix = ''
-    registered, suffix = etld_obj.parse(url)
-    twold = '.'.join([registered.split('.')[-1], suffix])
-    #print "twold: ", twold
-    return twold
+def extract_twold(hostname):
+    if hostname is None:
+        return None
 
+    hostname = hostname.strip()
+    if len(hostname) == 0:
+        return None
+    if isIP4Address(hostname):
+        return None
+
+    try:
+        etld_obj = etld.etld()
+        registered = ''
+        suffix = ''
+        registered, suffix = etld_obj.parse(hostname)
+        twold = '.'.join([registered.split('.')[-1], suffix])
+        print "hostname: %s -- twold: %s" % (hostname,twold)
+        return twold
+    except:
+        print "Unable to compute twold: hostname: %s" % (hostname,)
+
+    return None
+
+def isIP4Address(hostname):
+    ip4reg = re.compile(
+            "([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$")
+    m = ip4reg.match(hostname)
+    if m is not None:
+        return True
 
 # Reverse the IP address for querying origin.asn.cymru.com
 def reverse_ip(ip):

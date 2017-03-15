@@ -96,7 +96,11 @@ def insert_hts_based_features(cursor, dump_id):
     (host,server,date) = row
     domain = util.reorder_domain(host)
     twold = util.reorder_domain(util.extract_twold(domain))
-    twold_like = twold + '.%'
+    twold_like = '-NONE-' # avoids any matching in "pe.host LIKE %s" in the query below 
+    if twold is None:
+        if not host is None:
+            twold = host
+            twold_like = twold + '.%'
 
     query = """
         SELECT dump_id,pe.sha1,pe.host,pe.server,trusted_av_labels,num_av_labels
