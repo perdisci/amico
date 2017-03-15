@@ -2,9 +2,7 @@
 
 # run as root...
 
-for i in {4,6,8,9,10,11}; do
-
-NIC=eth$i
+NIC=$1
 
 ifconfig $NIC up
 # ethtool -G $NIC rx 4096
@@ -17,4 +15,3 @@ ethtool -K $NIC rx off
 ethtool -K $NIC tx off
 ethtool -K $NIC sg off
 
-done

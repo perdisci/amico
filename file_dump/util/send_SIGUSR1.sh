@@ -1,9 +1,9 @@
 #!/bin/bash
 
-for i in $(ps aux | grep file_dump | grep -v python | grep -v sudo | grep -v postgres | grep -v grep | awk '{print $2}'); do 
+for i in $(pgrep file_dump); do 
 	sudo kill -SIGUSR1 $i; 
 done
 
-for i in $(ls eth*.log); do 
+for i in $(ls zc98_*.log); do 
 	tail $i | egrep "(dropped|received)"; 
 done
