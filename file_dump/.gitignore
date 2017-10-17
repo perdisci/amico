@@ -1,4 +1,6 @@
 config.py
 file_dump
 *.o
+*.log
+*.log.*
 dumps/

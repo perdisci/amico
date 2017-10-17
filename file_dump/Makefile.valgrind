@@ -2,7 +2,7 @@ OBJ = file_dump.o search.o lru-cache.o seq_list.o
 CFLAGS = -Wall -g -O0
 CC = gcc
 INCLUDE =
-LIB = -lpcap -lpthread
+LIB = -lpcap -lpthread -lpfring
 
 file_dump: ${OBJ}
 	${CC} ${CFLAGS} ${INCLUDES} -o $@ ${OBJ} ${LIB}
