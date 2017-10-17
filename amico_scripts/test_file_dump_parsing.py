@@ -1,0 +1,118 @@
+#!/usr/bin/python
+
+###########################################################################
+# Copyright (C) 2014 Phani Vadrevu, Roberto Perdisci                      #
+# pvadrevu@uga.edu                                                        #
+#                                                                         #
+# Distributed under the GNU Public License                                #
+# http://www.gnu.org/licenses/gpl.txt                                     #
+#                                                                         #
+# This program is free software; you can redistribute it and/or modify    #
+# it under the terms of the GNU General Public License as published by    #
+# the Free Software Foundation; either version 2 of the License, or       #
+# (at your option) any later version.                                     #
+#                                                                         #
+###########################################################################
+
+import re
+import sys
+from config import *
+
+import util
+
+def db_file_dumps(file_path):
+    #print "Time b4 http parsing: %f" %(time.time(),)
+    # Use Autocommit mode for database connection
+
+    fileHandle = open(file_path)
+
+    # Timestamp
+    r = re.compile('[0-9]+')
+    timestamp = r.search(fileHandle.readline())
+    if timestamp is not None:
+        timestamp = timestamp.group()
+        #print timestamp.group()
+
+    # Source and Destination IPs
+    r = re.compile('([0-9.]+):.*-([0-9.]+):([0-9]+)-.*')
+    ip = r.search(fileHandle.readline())
+    if ip is not None:
+        srcip = ip.group(2)
+        dstip = ip.group(1)
+        dst_port = ip.group(3)
+        #print ip.group(1)
+        #print ip.group(2)
+    else:
+        srcip = None
+        dstip = None
+        dst_port = None
+
+    # URL
+    r = re.compile('(GET|POST|HEAD) (.*)')
+    url = r.search(fileHandle.readline())
+    if url is not None:
+        method = url.group(1)
+        method = method[:10]
+        url = url.group(2)
+        toks = url.split()
+        url = toks[0]
+        #print url.group(1)
+    else:
+        method = None
+
+
+    # Host
+    r = re.compile('Host: (.*)')
+    host = r.search(fileHandle.readline())
+    if host is not None:
+        host = host.group(1)
+        host = util.reorder_domain(host.strip())
+        #print host.group(1)
+
+
+    # Referer
+    r = re.compile('Referer: (.*)')
+    referer = r.search(fileHandle.readline())
+    if referer is not None:
+        referer = referer.group(1)
+        #print referrer.group(1)
+
+
+    # CORRUPT_PE
+    corrupt_pe = False
+    r = re.compile('CORRUPT_FILE')
+    corrupt_pe_str = r.search(fileHandle.readline())
+    if corrupt_pe_str is not None:
+        corrupt_pe = True
+
+
+    # Now, parse data from the response
+    # Server
+    data = fileHandle.read()
+    r = re.compile('Server: (.*)')
+    server = r.search(data)
+    if server is not None:
+        server = server.group(1)
+        server = server.rstrip('\r')
+        server = server[:64]
+
+    # Content-Type
+    r = re.compile('Content-Type: (.*)')
+    cont_type = r.search(data)
+    if cont_type is not None:
+        cont_type = cont_type.group(1)
+        cont_type = cont_type.rstrip('\r')
+        cont_type = cont_type[:128]
+
+    fileHandle.close()
+
+    print url
+    return url
+
+
+if __name__ == "__main__":
+    file_path = sys.argv[1]
+    db_file_dumps(file_path)
+
+
+
