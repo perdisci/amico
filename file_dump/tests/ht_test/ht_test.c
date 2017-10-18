@@ -4,6 +4,9 @@
  * Testing of generic Hash Table
  */
 
+// To use Valgrind:
+// G_SLICE=always-malloc G_DEBUG=gc-friendly  valgrind -v --tool=memcheck --leak-check=full --num-callers=40 --log-file=valgrind.log ./ht_test
+
 #include <stdio.h>
 #include "../../hash_table.h"
 

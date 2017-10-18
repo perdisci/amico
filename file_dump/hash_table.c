@@ -83,15 +83,11 @@ void ht_insert(hash_table_t *ht, char *key, void* value, short copy, size_t valu
 
     if(copy) {
         size_t key_len = strnlen(key,MAX_KEY_LEN);
-        printf("key_len:%lu\n", key_len);
         e->key = (char*)malloc(sizeof(char)*(key_len+1));
-        printf("e->key:%p\n", e->key);
         strncpy(e->key,key,key_len);
         e->key[key_len]='\0';
 
-        printf("value_len:%lu\n", value_size);
         e->value = (void*)malloc(value_size);
-        printf("copying:%lu bytes\n", value_size);
         memcpy(e->value,value,value_size);
     }
     else {
