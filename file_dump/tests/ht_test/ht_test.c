@@ -23,9 +23,9 @@ void destroy_http_req_value(void* value) {
 
 }
 
-int sizeof_http_req_value(http_req_value_t* v) {
+size_t sizeof_http_req_value(http_req_value_t* v) {
 
-    int size = 0;
+    size_t size = 0;
 
     size += sizeof(http_req_value_t);
     size += strnlen(v->url,MAX_URL_LEN)+1;
@@ -40,7 +40,7 @@ int main(void) {
     char key[MAX_KEY_LEN+1];
     void* value = NULL;
 
-    hash_table_t* ht = ht_init(0, 1, 1, NULL); 
+    hash_table_t* ht = ht_init(0, 1, 1); 
 
     http_req_value_t v;
 
@@ -56,13 +56,13 @@ int main(void) {
         int key_len = strlen(key);
         key[key_len] = (char)(48+i); key[key_len+1]='\0'; 
         int url_len = strlen(v.url);
-        printf("url_len:%d\n", url_len);
         v.url[url_len] = (char)(48+i); v.url[url_len+1]='\0'; 
         int ua_len = strlen(v.ua);
         v.ua[ua_len] = (char)(48+i); v.ua[ua_len+1]='\0'; 
 
         value = (void*)&v;
 
+        printf("Inserting key:%s\n", key);
         ht_insert(ht, key, value, 1, sizeof_http_req_value(&v));
 
         http_req_value_t* p = ht_search(ht,key);
