@@ -254,9 +254,9 @@ void reverse(char *s);
 int is_http_request(const char *payload, int payload_size);
 int is_complete_http_resp_header(const struct tcp_flow *tflow);
 int contains_interesting_file(const struct tcp_flow *tflow);
-char *get_url(const char *payload, int payload_size);
-char *get_host(const char *payload, int payload_size);
-char *get_referer(const char *payload, int payload_size);
+char* get_url(char* url, const char *payload, int payload_size);
+char* get_host(char* host, const char *payload, int payload_size);
+char* get_referer(char* referer, const char *payload, int payload_size);
 int get_content_length(const char *payload, int payload_size);
 int get_resp_hdr_length(const char *payload, int payload_size);
 int parse_content_length_str(const char *cl_str);
@@ -898,21 +898,16 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
             tflow->flow_state = FLOW_HTTP_RESP_HEADER_WAIT;
             tflow->http_request_count++;
 
-            strncpy(tflow->url, get_url(payload, payload_size), MAX_URL_LEN);
-            tflow->url[MAX_URL_LEN] = '\0'; // just to be extra safe...
-            strncpy(tflow->host, get_host(payload, payload_size), MAX_HOST_LEN);
-            tflow->host[MAX_HOST_LEN] = '\0'; // just to be extra safe...
-            strncpy(tflow->referer, get_referer(payload, payload_size), MAX_REFERER_LEN);
-            tflow->referer[MAX_REFERER_LEN] = '\0'; // just to be extra safe...
+            get_url(tflow->url, payload, payload_size);
+            get_host(tflow->host, payload, payload_size);
+            get_referer(tflow->referer, payload, payload_size);
 
             #ifdef FILE_DUMP_DEBUG
             if(debug_level >= VERBOSE) {
                 printf("Found HTTP request: %s : %s : %s\n",
-                    // get_host(tflow->cs_payload, tflow->cs_payload_size), 
-                    // get_url(tflow->cs_payload, tflow->cs_payload_size));
-                    get_host(payload, payload_size), 
-                    get_url(payload, payload_size),
-                    get_referer(payload, payload_size));
+                    tflow->host, 
+                    tflow->url,
+                    tflow->referer);
                 printf("Flow state = %d\n", tflow->flow_state);
                 fflush(stdout);
             }
@@ -1263,10 +1258,9 @@ int is_http_request(const char *payload, int payload_size) {
 }
 
 
-char *get_url(const char *payload, int payload_size) {
+char* get_url(char* url, const char *payload, int payload_size) {
 
     int i;
-    static char url[MAX_URL_LEN+1];
 
     for(i=0; i<MAX_URL_LEN && i<payload_size; i++) {
         if(payload[i] == '\r' || payload[i] == '\n') {
@@ -1285,9 +1279,8 @@ char *get_url(const char *payload, int payload_size) {
 }
 
 
-char *get_host(const char *payload, int payload_size) {
+char *get_host(char* host, const char *payload, int payload_size) {
 
-    static char host[MAX_HOST_LEN+1];
     char haystack[payload_size+1];
     const char needle[] = "\r\nHost:";
     char *p = NULL;
@@ -1317,9 +1310,8 @@ char *get_host(const char *payload, int payload_size) {
 }
 
 
-char *get_referer(const char *payload, int payload_size) {
+char *get_referer(char* referer, const char *payload, int payload_size) {
 
-    static char referer[MAX_REFERER_LEN+1];
     char haystack[payload_size+1];
     const char needle[] = "\r\nReferer:";
     char *p = NULL;
