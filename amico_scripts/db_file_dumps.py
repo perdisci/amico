@@ -48,12 +48,14 @@ def db_file_dumps(file_path, sha1, md5, file_size, file_type):
         dst_port = None
 
     # URL
-    r = re.compile('(GET|POST|HEAD) (.*) ')
+    r = re.compile('(GET|POST|HEAD) (.*)')
     url = r.search(fileHandle.readline())
     if url is not None:
         method = url.group(1)
         method = method[:10]
         url = url.group(2)
+        toks = url.split()
+        url = toks[0]
         #print url.group(1)
     else:
         method = None
