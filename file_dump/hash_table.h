@@ -19,10 +19,6 @@
 #ifndef __HASH_TABLE__
 #define __HASH_TABLE__
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
 #define MAX_KEY_LEN 1024
 #define DEFAULT_HT_LENGTH 1024*1024
 

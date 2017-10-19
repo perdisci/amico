@@ -20,98 +20,75 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "hash_table.h"
+#include "fifo_queue.h"
 
 
-/* Initializes the Hash Table */
+/* Initializes the queue */
 // NOTE(Roberto): destroy_values only means a "shallow" destroy
 //  if value contains dynamically allocated objects, these will not 
 //  be destroyed. This HT needs to be extended to handle those cases.
-hash_table_t* ht_init(u_int length, short destroy_keys, short destroy_values) {
+hash_table_t* ht_init(u_int max_len, short destroy_values) {
     
-
-    hash_table_t* ht = (hash_table_t*)malloc(sizeof(hash_table_t));
-    if(length>0)
-        ht->length = length;
+    fifo_queue_t* q = (fifo_queue_t*)malloc(sizeof(fifo_queue_t));
+    if(max_len>0)
+        q->max_len = max_len;;
     else
-        ht->length = DEFAULT_HT_LENGTH;
-    ht->destroy_keys = destroy_keys;
-    ht->destroy_values = destroy_values;
-    ht->vect = (ht_entry_t**)malloc(sizeof(ht_entry_t*) * ht->length);
+        q->max_len = MAX_QUEUE_LEN;
+    q->destroy_values = destroy_values;
 
-    int i;    
-    for(i=0; i < ht->length; i++)
-        ht->vect[i] = NULL;
+    q->curr_len = 0;
+    q->head = NULL;
+    q->tail = NULL;
 
-    return ht;
+    return q;
 
 }
 
 
-/* Deallocate memory for Hash Table */
-void ht_destroy(hash_table_t* ht) {
+/* Deallocate memory for Queue */
+void ht_destroy(fifo_queue_t* q) {
 
-    ht_entry_t *v;
+    queue_entry_t *v;
     u_int i;
 
-    if(ht == NULL)
+    if(q == NULL)
         return;
 
-    for(i=0; i < ht->length; i++) {
-        v = ht->vect[i];
-        while(v != NULL) {
-            ht_entry_t *p = v;
-            v = v->next;
-            if(ht->destroy_keys)
-                free(p->key);
-            if(ht->destroy_values)
-                free(p->value);
-            free(p);
-        }
+    v = q->head;
+    while(v != NULL) {
+        queue_entry_t *p = v;
+        v = v->next;
+        if(q->destroy_values)
+            free(p->value);
+        free(p);
     }
    
-    free(ht->vect);
-    ht->vect = NULL;
-
-    free(ht); 
+    free(q); 
 
 }
 
 
-void ht_insert(hash_table_t *ht, char *key, void* value, short copy, size_t value_size) {
+void queue_insert(fifo_queue_t* q, void* value, short copy, size_t value_size) {
 
-    ht_entry_t *v;
+    queue_entry_t *v = q->tail;
 
-    u_int h = hash_fn(key) % ht->length;
-    ht_entry_t *e = (ht_entry_t*)malloc(sizeof(ht_entry_t));
+    queue_entry_t *e = (queue_entry_t*)malloc(sizeof(queue_entry_t));
 
     if(copy) {
-        size_t key_len = strnlen(key,MAX_KEY_LEN);
-        e->key = (char*)malloc(sizeof(char)*(key_len+1));
-        strncpy(e->key,key,key_len);
-        e->key[key_len]='\0';
-
         e->value = (void*)malloc(value_size);
         memcpy(e->value,value,value_size);
     }
     else {
-        e->key = key;
         e->value = value;
     }
 
     e->next = NULL;
 
-    v = ht->vect[h];
-    if(v == NULL) {
-        ht->vect[h] = e;
-        return;
+    if(q->head == NULL) {
+        q->head = e;
+        q->tail = e;
+        q->curr_len++;
     }
-
-    while(v->next != NULL)
-        v = v->next;
-
-    v->next = e;
-
 }
 
 /* Delete key from Hash Table */
