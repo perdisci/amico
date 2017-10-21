@@ -42,12 +42,11 @@ typedef struct fifo_queue {
 fifo_queue_t* queue_init(u_int max_len, short destroy_values);
 
 void queue_insert(fifo_queue_t* q, void* value, short copy, size_t value_size);
-void queue_delete(fifo_queue_t* q, int index);
 void queue_destroy(fifo_queue_t* q);
 
+void* queue_pop(fifo_queue_t* q); // removes head from queue and returns its value
 void* queue_head(const fifo_queue_t* q);
 void* queue_tail(const fifo_queue_t* q);
-void* queue_at(const fifo_queue_t* q, int index);
 void* queue_next(void* v);
 
 void print_queue(fifo_queue_t *q);

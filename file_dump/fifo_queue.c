@@ -87,14 +87,29 @@ void queue_insert(fifo_queue_t* q, void* value, short copy, size_t value_size) {
     if(q->head == NULL) {
         q->head = e;
         q->tail = e;
-        q->curr_len++;
+    }
+    else {
+        q->tail->next = e;
+        q->tail = e;
+    }
+    q->curr_len++;
+        
+    if(q->curr_len >= q->max_len) {
+        queue_delete_head(q);
     }
 }
 
-/* Delete key from Hash Table */
-void ht_delete(hash_table_t *ht, const char *key) {
+/* Remove head and return its value */
+void* queue_pop(fifo_queue_t* q) {
 
-    ht_entry_t *v;
+    if(q->head == NULL)
+        return NULL;
+
+    queue_entry_t *v = q->head;
+    q->head = v->next;
+    return v;
+    
+    u_int i = 0;
     ht_entry_t *prev;
 
     u_int h = hash_fn(key) % ht->length;
@@ -129,7 +144,6 @@ void ht_delete(hash_table_t *ht, const char *key) {
 
 }
 
-/* Searches an LRU cache entry using the Hash Table */
 void* ht_search(const hash_table_t *ht, const char *key) {
 
     ht_entry_t *v;
