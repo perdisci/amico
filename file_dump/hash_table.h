@@ -19,6 +19,8 @@
 #ifndef __HASH_TABLE__
 #define __HASH_TABLE__
 
+#include <stdbool.h> 
+
 #define MAX_KEY_LEN 1024
 #define DEFAULT_HT_LENGTH 1024*1024
 
@@ -36,15 +38,17 @@ typedef struct hash_table {
 
     u_int length;
     ht_entry_t **vect;
-    short destroy_keys;
-    short destroy_values;
+    bool destroy_keys;
+    bool destroy_values;
+    void (*destroy_val_fn)(void*);
 
 } hash_table_t;
 
-hash_table_t* ht_init(u_int length, short destroy_keys, short destroy_values);
+hash_table_t* ht_init(u_int length, bool copy_keys, bool copy_values, bool destroy_keys, bool destroy_values, void (*destroy_val_fn)(void*));
 
-void ht_insert(hash_table_t *ht, char *key, void* value, short copy, size_t value_size);
-void ht_delete(hash_table_t *ht, const char *key);
+// value_size is needed only if copy_values was set to true in ht_init
+void ht_insert(hash_table_t *ht, char *key, void* value, size_t value_size);
+void ht_delete(hash_table_t *ht, char *key);
 void ht_destroy(hash_table_t* ht);
 
 void* ht_search(const hash_table_t *ht, const char *key);
