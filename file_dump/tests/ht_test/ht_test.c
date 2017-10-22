@@ -35,11 +35,11 @@ void destroy_http_req_value_dyn(void* value) {
 
 }
 
-size_t sizeof_http_req_value(http_req_value_t* v) {
+size_t sizeof_http_req_value_dyn(http_req_value_dyn_t* v) {
 
     size_t size = 0;
 
-    size += sizeof(http_req_value_t);
+    size += sizeof(http_req_value_dyn_t);
     size += strnlen(v->url,MAX_URL_LEN)+1;
     size += strnlen(v->ua,MAX_UA_LEN)+1;
 
@@ -74,7 +74,7 @@ void test1() {
         value = (void*)&v;
 
         printf("Inserting key:%s\n", key);
-        ht_insert(ht, key, value, 1, sizeof_http_req_value(&v));
+        ht_insert(ht, key, value);
 
         http_req_value_t* p = ht_search(ht,key);
         printf("key:%s, url:%s, ua:%s\n", key, p->url, p->ua);
@@ -91,7 +91,7 @@ void test1() {
 void test2() {
 
     char key[MAX_KEY_LEN+1];
-    void* value = ()malloc();
+    http_req_value_dyn_t* value = (http_req_value_dyn_t*)malloc(sizeof(http_req_value_dyn_t));
 
     hash_table_t* ht = ht_init(0, true, false, true, true, destroy_http_req_value_dyn); 
 
@@ -99,6 +99,9 @@ void test2() {
 
     strncpy(key,"127.0.0.1",MAX_KEY_LEN);
     key[MAX_KEY_LEN]='\0';
+
+    v.url = (char*)malloc(sizeof(char)*MAX_URL_LEN+1);
+    v.ua = (char*)malloc(sizeof(char)*MAX_UA_LEN+1);
 
     strncpy(v.url,"/test1/test2/test3.php",MAX_URL_LEN);
     v.url[MAX_URL_LEN]='\0';
@@ -108,16 +111,16 @@ void test2() {
     int i;
     for(i=0; i<10; i++) {
         int key_len = strlen(key);
-        key[key_len] = (char)(48+i); key[key_len+1]='\0'; 
+        key[key_len] = (char)(49+i); key[key_len+1]='\0'; 
         int url_len = strlen(v.url);
-        v.url[url_len] = (char)(48+i); v.url[url_len+1]='\0'; 
+        v.url[url_len] = (char)(49+i); v.url[url_len+1]='\0'; 
         int ua_len = strlen(v.ua);
-        v.ua[ua_len] = (char)(48+i); v.ua[ua_len+1]='\0'; 
+        v.ua[ua_len] = (char)(49+i); v.ua[ua_len+1]='\0'; 
 
         value = (void*)&v;
 
         printf("Inserting key:%s\n", key);
-        ht_insert(ht, key, value, 1, sizeof_http_req_value(&v));
+        ht_insert(ht, key, value, sizeof_http_req_value(&v));
 
         http_req_value_t* p = ht_search(ht,key);
         printf("key:%s, url:%s, ua:%s\n", key, p->url, p->ua);

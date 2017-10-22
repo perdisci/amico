@@ -19,7 +19,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
 
 #include "hash_table.h"
 
@@ -33,6 +32,7 @@ hash_table_t* ht_init(u_int length,
                       bool copy_values,
                       bool destroy_keys, 
                       bool destroy_values, 
+                      void* (*copy_val_fn)(void*),
                       void (*destroy_val_fn)(void*)) {
     
 
@@ -43,6 +43,7 @@ hash_table_t* ht_init(u_int length,
         ht->length = DEFAULT_HT_LENGTH;
     ht->destroy_keys = destroy_keys;
     ht->destroy_values = destroy_values;
+    ht->copy_val_fn = copy_val_fn;
     ht->destroy_val_fn = destroy_val_fn;
     ht->vect = (ht_entry_t**)malloc(sizeof(ht_entry_t*) * ht->length);
 
@@ -87,7 +88,7 @@ void ht_destroy(hash_table_t* ht) {
 }
 
 
-void ht_insert(hash_table_t *ht, char *key, void* value, size_t value_size) {
+void ht_insert(hash_table_t *ht, char *key, void* value) {
 
     ht_entry_t *v;
 
@@ -105,8 +106,9 @@ void ht_insert(hash_table_t *ht, char *key, void* value, size_t value_size) {
     }
 
     if(ht->copy_values) {
-        e->value = (void*)malloc(value_size);
-        memcpy(e->value,value,value_size);
+        e->value = ht->copy_value_fn(value);
+        // (void*)malloc(value_size);
+        // memcpy(e->value,value,value_size);
     }
     else {
         e->value = value;
