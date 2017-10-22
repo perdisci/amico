@@ -27,6 +27,24 @@ typedef struct http_req_value_dyn {
     char* ua; // generalized user agent string
 } http_req_value_dyn_t;
 
+void copy_http_req_value_dyn(void* dst_v, void* src_v) {
+
+    http_req_value_dyn_t* dv = (http_req_value_dyn_t*)dst_v;
+    http_req_value_dyn_t* sv = (http_req_value_dyn_t*)src_v;
+    
+    size_t surl_len = strnlen(sv->url,MAX_URL_LEN);
+    size_t sua_len = strnlen(sv->ua,MAX_UA_LEN);
+
+    dv->url = (char*)malloc(sizeof(char)*(surl_len+1));
+    dv->ua  = (char*)malloc(sizeof(char)*(sua_len+1));
+
+    strncpy(dv->url, sv->url, surl_len);
+    dv->url[surl_len]='\0';
+
+    strncpy(dv->ua, sv->ua, sua_len);
+    dv->ua[sua_len]='\0';
+}
+
 void destroy_http_req_value_dyn(void* value) {
 
     http_req_value_dyn_t* v = (http_req_value_dyn_t*)value;
@@ -51,7 +69,8 @@ void test1() {
     char key[MAX_KEY_LEN+1];
     void* value = NULL;
 
-    hash_table_t* ht = ht_init(0, true, true, true, true, NULL); 
+    hash_table_t* ht = ht_init(0, true, true, true, true, 
+                               sizeof(http_req_value_t), NULL, NULL); 
 
     http_req_value_t v;
 
@@ -91,9 +110,8 @@ void test1() {
 void test2() {
 
     char key[MAX_KEY_LEN+1];
-    http_req_value_dyn_t* value = (http_req_value_dyn_t*)malloc(sizeof(http_req_value_dyn_t));
 
-    hash_table_t* ht = ht_init(0, true, false, true, true, destroy_http_req_value_dyn); 
+    hash_table_t* ht = ht_init(0, true, true, true, true, sizeof(http_req_value_dyn_t), copy_http_req_value_dyn, destroy_http_req_value_dyn); 
 
     http_req_value_dyn_t v;
 
@@ -111,18 +129,17 @@ void test2() {
     int i;
     for(i=0; i<10; i++) {
         int key_len = strlen(key);
-        key[key_len] = (char)(49+i); key[key_len+1]='\0'; 
+        key[key_len] = (char)(48+i); key[key_len+1]='\0'; 
         int url_len = strlen(v.url);
-        v.url[url_len] = (char)(49+i); v.url[url_len+1]='\0'; 
+        v.url[url_len] = (char)(48+i); v.url[url_len+1]='\0'; 
         int ua_len = strlen(v.ua);
-        v.ua[ua_len] = (char)(49+i); v.ua[ua_len+1]='\0'; 
-
-        value = (void*)&v;
+        v.ua[ua_len] = (char)(48+i); v.ua[ua_len+1]='\0'; 
 
         printf("Inserting key:%s\n", key);
-        ht_insert(ht, key, value, sizeof_http_req_value(&v));
+        ht_insert(ht, key, (void*)&v);
 
-        http_req_value_t* p = ht_search(ht,key);
+        void* value = ht_search(ht,key);
+        http_req_value_dyn_t* p = (http_req_value_dyn_t*)value;
         printf("key:%s, url:%s, ua:%s\n", key, p->url, p->ua);
     }
 
@@ -132,15 +149,19 @@ void test2() {
 
     ht_destroy(ht);
 
+    free(v.url);
+    free(v.ua);
+
 }
 
 
 int main() {
 
-    printf("== RUNNING TEST1 ==");
+    printf("\n\n== RUNNING TEST1 ==\n\n");
     test1();
 
-    printf("== RUNNING TEST1 ==");
+    printf("\n\n== RUNNING TEST2 ==\n\n");
     test2();
-
+    
+    return 1;
 }

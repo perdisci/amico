@@ -32,7 +32,8 @@ hash_table_t* ht_init(u_int length,
                       bool copy_values,
                       bool destroy_keys, 
                       bool destroy_values, 
-                      void* (*copy_val_fn)(void*),
+                      size_t sizeof_values,
+                      void (*copy_val_fn)(void*,void*),
                       void (*destroy_val_fn)(void*)) {
     
 
@@ -41,8 +42,11 @@ hash_table_t* ht_init(u_int length,
         ht->length = length;
     else
         ht->length = DEFAULT_HT_LENGTH;
+    ht->copy_keys = copy_keys;
+    ht->copy_values = copy_values;
     ht->destroy_keys = destroy_keys;
     ht->destroy_values = destroy_values;
+    ht->sizeof_values = sizeof_values;
     ht->copy_val_fn = copy_val_fn;
     ht->destroy_val_fn = destroy_val_fn;
     ht->vect = (ht_entry_t**)malloc(sizeof(ht_entry_t*) * ht->length);
@@ -73,7 +77,7 @@ void ht_destroy(hash_table_t* ht) {
             if(ht->destroy_keys)
                 free(p->key);
             if(ht->destroy_val_fn != NULL)
-                destroy_val_fn(p->value);
+                ht->destroy_val_fn(p->value);
             if(ht->destroy_values)
                 free(p->value);
             free(p);
@@ -106,9 +110,12 @@ void ht_insert(hash_table_t *ht, char *key, void* value) {
     }
 
     if(ht->copy_values) {
-        e->value = ht->copy_value_fn(value);
-        // (void*)malloc(value_size);
-        // memcpy(e->value,value,value_size);
+        e->value = (void*)malloc(ht->sizeof_values);
+        if(ht->copy_val_fn != NULL) { // Deep copy:
+            ht->copy_val_fn(e->value, value);
+        }
+        else // Shallow copy:
+            memcpy(e->value,value,ht->sizeof_values);
     }
     else {
         e->value = value;
@@ -129,8 +136,8 @@ void ht_insert(hash_table_t *ht, char *key, void* value) {
 
 }
 
-/* Delete key from Hash Table */
-void ht_delete(hash_table_t *ht, const char *key) {
+
+void ht_delete(hash_table_t *ht, char *key) {
 
     ht_entry_t *v;
     ht_entry_t *prev;
@@ -154,7 +161,7 @@ void ht_delete(hash_table_t *ht, const char *key) {
                 if(ht->destroy_keys)
                     free(v->key);
                 if(ht->destroy_val_fn != NULL)
-                    destroy_val_fn(value);
+                    ht->destroy_val_fn(v->value);
                 if(ht->destroy_values)
                     free(v->value);
                 free(v);
@@ -229,7 +236,6 @@ void print_ht(hash_table_t *ht) {
     for(i=0; i < ht->length; i++) {
         v = ht->vect[i];
         if(v != NULL) {
-            printf("HASH_TAB_ENTRY: %s", v->key);
             while(v->next!=NULL) {
                 v = v->next;
                 printf(" | %s", v->key);

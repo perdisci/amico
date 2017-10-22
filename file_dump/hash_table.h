@@ -38,17 +38,24 @@ typedef struct hash_table {
 
     u_int length;
     ht_entry_t **vect;
+    bool copy_keys;
+    bool copy_values;
     bool destroy_keys;
     bool destroy_values;
-    void* (*copy_val_fn)(void*);
+    size_t sizeof_values;
+    void (*copy_val_fn)(void*, void*);
     void (*destroy_val_fn)(void*);
 
 } hash_table_t;
 
-hash_table_t* ht_init(u_int length, bool copy_keys, bool copy_values, bool destroy_keys, bool destroy_values, void* (*copy_val_fn)(void*), void (*destroy_val_fn)(void*));
+
+hash_table_t* 
+ht_init(u_int length, bool copy_keys, bool copy_values, 
+        bool destroy_keys, bool destroy_values, size_t sizeof_values,
+        void (*copy_val_fn)(void*,void*), void (*destroy_val_fn)(void*));
 
 // value_size is needed only if copy_values was set to true in ht_init
-void ht_insert(hash_table_t *ht, char *key, void* value, size_t value_size);
+void ht_insert(hash_table_t *ht, char *key, void* value);
 void ht_delete(hash_table_t *ht, char *key);
 void ht_destroy(hash_table_t* ht);
 
