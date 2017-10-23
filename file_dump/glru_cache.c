@@ -17,82 +17,32 @@
  */
 
 #include <time.h>
-#include "lru-cache.h"
+#include "glru_cache.h"
 
-// #define LRUC_DEBUG
-#define HT_SIZE_FACTOR 10
-#define LRUC_MIN_ENTRIES 10
+// #define GLRUC_DEBUG
+#define GHT_SIZE_FACTOR 10
+#define GLRUC_MIN_ENTRIES 10
 
-/* Initializes the Hash Table */
-hash_table_t* ht_init(u_int length) {
-    
-    int i;    
-
-    hash_table_t* ht = (hash_table_t*)malloc(sizeof(hash_table_t));
-    ht->length = length * HT_SIZE_FACTOR;
-    ht->vect = (ht_entry_t**)malloc(sizeof(ht_entry_t*) * ht->length);
-    for(i=0; i < ht->length; i++)
-        ht->vect[i] = NULL;
-
-    return ht;
-
-}
-
-
-/* Deallocate memory for Hash Table */
-void ht_destroy(hash_table_t* ht) {
-
-    ht_entry_t *v;
-    u_int i;
-
-    if(ht == NULL)
-        return;
-
-    for(i=0; i < ht->length; i++) {
-        v = ht->vect[i];
-        while(v != NULL) {
-            ht_entry_t *p = v;
-            v = v->next;
-            #ifdef LRUC_DEBUG 
-                printf("Destroying ht vect entry!\n");
-                fflush(stdout);
-            #endif
-            free(p);
-        }
-    }
-   
-    free(ht->vect);
-    ht->vect = NULL;
-
-    free(ht); 
-
-}
-
-
-void default_destroy_val_fn(void *v) {
-    free(v);
-}
-
-
-/* Initializes the LRU cache in the special case of char* values */
-lru_cache_t* lruc_init_str(u_int max_entries) {
-    return lruc_init(max_entries, default_destroy_val_fn);
-}
 
 
 /* Initializes the LRU cache */
-lru_cache_t* lruc_init(u_int max_entries, void (*destroy_val_fn)(void*)) {
+glru_cache_t* glruc_init(size_t max_entries, void (*destroy_val_fn)(void*)) {
 
-    lru_cache_t* lruc = (lru_cache_t*)malloc(sizeof(lru_cache_t));
-    lruc->ht = ht_init(max_entries);
+    glru_cache_t* lruc = (glru_cache_t*)malloc(sizeof(glru_cache_t));
+    lruc->ht = ght_init(max_entries);
     lruc->top = NULL;
-    if(destroy_val_fn != NULL)
-        lruc->destroy_val_fn = destroy_val_fn;
-    else
-        lruc->destroy_val_fn = default_destroy_val_fn;
+    
+    lruc->copy_keys = copy_keys;
+    lruc->copy_values = copy_values;
+    lruc->destroy_keys = destroy_keys;
+    lruc->destroy_values = destroy_values;
+    lruc->sizeof_values = sizeof_values;
+    lruc->copy_val_fn = copy_val_fn;
+    lruc->destroy_val_fn = destroy_val_fn;
+
     lruc->num_entries = 0;
-    lruc->max_entries = LRUC_MIN_ENTRIES; // we should force at least these many entries
-    if(max_entries > LRUC_MIN_ENTRIES)
+    lruc->max_entries = GLRUC_MIN_ENTRIES; // we should force at least these many entries
+    if(max_entries > GLRUC_MIN_ENTRIES)
         lruc->max_entries = max_entries;
 
     return lruc;
@@ -100,7 +50,7 @@ lru_cache_t* lruc_init(u_int max_entries, void (*destroy_val_fn)(void*)) {
 
 
 /* Deallocate memory for LRU cache */
-void lruc_destroy(lru_cache_t *lruc) {
+void glruc_destroy(glru_cache_t *lruc) {
 
     if(lruc == NULL)
         return;
@@ -118,7 +68,7 @@ void lruc_destroy(lru_cache_t *lruc) {
 
     lruc->top->prev->next = NULL; // break the circular list
     while(lruc->top != NULL) {
-        lruc_entry_t *t = lruc->top;
+        glruc_entry_t *t = lruc->top;
         lruc->top = lruc->top->next; 
         free(t->key);
         if(t->value != NULL) {
@@ -136,56 +86,12 @@ void lruc_destroy(lru_cache_t *lruc) {
 }
 
 
-/* Inserts an element into the Hash Table
- * 'lruc_e' is a pointer to the (key,value) entry in the LRU cache
- * related to the 'key' parameter
- */
-void ht_insert(hash_table_t *ht, lruc_entry_t *lruc_e, const char *key) {
-
-    ht_entry_t *v;
-
-    u_int h = hash_fn(key) % ht->length;
-    ht_entry_t *e = (ht_entry_t*)malloc(sizeof(ht_entry_t));
-    e->key = key;
-    e->le = lruc_e;
-    e->next = NULL;
-
-    v = ht->vect[h];
-    if(v == NULL) {
-        ht->vect[h] = e;
-        return;
-    }
-
-    while(v->next != NULL)
-        v = v->next;
-
-    v->next = e;
-
-}
-
-/* Inserts and (key,value) pair in the LRU cache.
- * Notice that value could be NULL, but the key cannot be NULL
- */
-
-int lruc_insert_str(lru_cache_t *lruc, const char *key, const char* value) {
-
-    int ret = lruc_insert(lruc, key, NULL);    
-    if(value!=NULL) {
-        lruc_entry_t *e = ht_search(lruc->ht, key);
-        e->value = (char*)malloc(sizeof(char)*(strlen(value)+1));
-        strcpy(e->value, value);
-    }
-
-    return ret;
-
-}
-
-int lruc_insert(lru_cache_t *lruc, const char *key, void* value) {
+int glruc_insert(glru_cache_t *lruc, const char *key, void* value) {
 
     if(key == NULL)
         return -1;
 
-    if(lruc_search(lruc, key)!=NULL) 
+    if(glruc_search(lruc, key)!=NULL) 
         return -1;
 
     lruc->num_entries++;
@@ -193,7 +99,7 @@ int lruc_insert(lru_cache_t *lruc, const char *key, void* value) {
     printf("Inserting %u\n", lruc->num_entries);
     #endif
 
-    lruc_entry_t *e = (lruc_entry_t*)malloc(sizeof(lruc_entry_t));
+    glruc_entry_t *e = (glruc_entry_t*)malloc(sizeof(glruc_entry_t));
     e->key = (char*)malloc(sizeof(char)*(strlen(key)+1));
     strcpy(e->key, key);
     e->value = value;
@@ -218,7 +124,7 @@ int lruc_insert(lru_cache_t *lruc, const char *key, void* value) {
         e->next = lruc->top;
         e->prev = lruc->top->prev->prev;
         lruc->top->prev->prev->next = e;
-        lruc_entry_t *tmp = lruc->top->prev;
+        glruc_entry_t *tmp = lruc->top->prev;
         lruc->top->prev = e;
 
         // evict from the cache
@@ -248,44 +154,10 @@ int lruc_insert(lru_cache_t *lruc, const char *key, void* value) {
 }
 
 
-/* Delete key from Hash Table */
-void ht_delete(hash_table_t *ht, const char *key) {
-
-    ht_entry_t *v;
-    ht_entry_t *prev;
-
-    u_int h = hash_fn(key) % ht->length;
-    #ifdef LRUC_DEBUG 
-        printf("key=%s, h=%u\n", key, h);
-    #endif
-
-    v = ht->vect[h];
-    prev = NULL;
-    if(v != NULL) {
-        do {
-            if(strcmp(key, v->key) == 0) {
-                if(prev != NULL)
-                    prev->next = v->next;
-                else if(v->next != NULL)
-                    ht->vect[h] = v->next;
-                else
-                    ht->vect[h] = NULL;
-                free(v);
-                return;
-            }
-            prev = v;    
-            v = v->next;
-        } while(v != NULL);
-    }
-    
-    return;
-
-}
-
 // Delete an entry from the LRU cache
-void lruc_delete(lru_cache_t *lruc, const char *key) {
+void glruc_delete(glru_cache_t *lruc, const char *key) {
 
-    lruc_entry_t *e = ht_search(lruc->ht, key);
+    glruc_entry_t *e = ht_search(lruc->ht, key);
 
     if(e!=NULL) {
         if(lruc->top == e && lruc->top->next == e) // only one entry!
@@ -310,54 +182,9 @@ void lruc_delete(lru_cache_t *lruc, const char *key) {
 }
 
 
-/* Searches an LRU cache entry using the Hash Table */
-lruc_entry_t* ht_search(const hash_table_t *ht, const char *key) {
+void* glruc_search(glru_cache_t *lruc, const char *key) {
 
-    ht_entry_t *v;
-
-    u_int h = hash_fn(key) % ht->length;
-    v = ht->vect[h];
-
-    #ifdef LRUC_DEBUG
-        printf("Hash Key = %u\n", h);
-        printf("v = %p\n", v);
-        fflush(stdout);
-    #endif
-
-    if(v == NULL) 
-        return NULL;
-
-    while(v != NULL) {
-        #ifdef LRUC_DEBUG
-            printf("v is not null!\n");
-            printf("key = %s\n", key);
-            printf("v->key = %s\n", v->key);
-            fflush(stdout);
-        #endif
-
-        if(strcmp(key, v->key) == 0)
-            return v->le;
-        v = v->next;
-    }
-
-    #ifdef LRUC_DEBUG
-        printf("HT entry not found! Returing NULL\n");
-        fflush(stdout);
-    #endif 
-
-    return NULL;
-
-}
-
-
-char* lruc_search_str(lru_cache_t *lruc, const char *key) {
-    return (char*)lruc_search(lruc, key);
-}
-
-
-void* lruc_search(lru_cache_t *lruc, const char *key) {
-
-    lruc_entry_t *e = ht_search(lruc->ht, key);
+    glruc_entry_t *e = ht_search(lruc->ht, key);
 
     #ifdef LRUC_DEBUG
         printf("e = %p\n", e);
@@ -395,65 +222,7 @@ void* lruc_search(lru_cache_t *lruc, const char *key) {
 }
 
 
-u_int hash_fn(const char* key) {
-
-    #define MAX_HASH_ITER 256
-    return DJBHash(key, strnlen(key, MAX_HASH_ITER));
-
-}
-
-
-/* The following hash function has been borrowed
- * and slightly modified from
- * http://www.partow.net/programming/hashfunctions/
- * Author: Arash Partow
- */
-u_int DJBHash(const char* str, u_int len)
-{
-   u_int hash = 5381;
-   u_int i    = 0;
-
-   for(i = 0; i < len; i++)
-   {
-      hash = ((hash << 5) + hash) + (str[i]);
-   }
-
-   return hash;
-}
-/***/
-
-
-void print_ht(hash_table_t *ht) {   
-
-    ht_entry_t *v;
-    u_int i;
-
-    if(ht == NULL)
-        return;
-
-    for(i=0; i < ht->length; i++) {
-        v = ht->vect[i];
-        if(v != NULL) {
-            #ifdef LRUC_DEBUG 
-            printf("HASH_TAB_ENTRY: %s", v->key);
-            #endif
-            while(v->next!=NULL) {
-                v = v->next;
-                #ifdef LRUC_DEBUG
-                printf(" | %s", v->key);
-                #endif
-            }
-            #ifdef LRUC_DEBUG
-            printf("\n");
-            #endif
-        }
-    }
-
-}
-
-
-
-void clean_lruc(lru_cache_t *lruc) {
+void glruc_prune(glru_cache_t *lruc) {
 
     if(lruc==NULL)
         return;
@@ -465,7 +234,7 @@ void clean_lruc(lru_cache_t *lruc) {
     // printf("Current Time = %u\n", t);
 
     do {
-        lruc_entry_t *e = lruc->top->prev;
+        glruc_entry_t *e = lruc->top->prev;
         // printf("e Time = %u\n", e->time);
 
         if((t - e->time) > MAX_LRUC_TTL) {
@@ -473,7 +242,7 @@ void clean_lruc(lru_cache_t *lruc) {
                 lruc->destroy_val_fn(e->value);
                 e->value = NULL;
             }
-            lruc_delete(lruc, e->key);
+            glruc_delete(lruc, e->key);
         }
         else
             break;
@@ -483,7 +252,7 @@ void clean_lruc(lru_cache_t *lruc) {
 }
 
 
-void print_lruc(lru_cache_t *lruc) {
+void print_lruc(glru_cache_t *lruc) {
 
     if(lruc==NULL)
         return;
@@ -491,7 +260,7 @@ void print_lruc(lru_cache_t *lruc) {
     if(lruc->top == NULL)
         return;    
 
-    lruc_entry_t *e = lruc->top;
+    glruc_entry_t *e = lruc->top;
     
     do {
         #ifdef LRUC_DEBUG
@@ -501,93 +270,4 @@ void print_lruc(lru_cache_t *lruc) {
     } while(e != lruc->top);
 
 }
-
-
-/* A little bit of testing to make sure things are working correctly... */
-/**
-int main() {
-
-    char k[256];
-    char v[256];
-    int i;
-
-    printf("Initializing LRU cache...\n");
-    lru_cache_t *lruc = lruc_init_str(10);        
-    fflush(stdout);
-
-
-    for(i=0; i < 10; i++) {
-        printf("Inserting (key,val)\n");
-        fflush(stdout);
-        sprintf(k, "key%d", (i+1));
-        sprintf(v, "value%d", (i+1));
-        lruc_insert_str(lruc, k, v);
-        print_ht(lruc->ht);
-        printf("###################\n");
-    }
-
-    print_ht(lruc->ht);
-    print_lruc(lruc);
-    printf("###################\n");
-
-    sprintf(k, "key%d", 8);
-    printf("Searchign for k=%s\n", k);
-    strcpy(v, lruc_search_str(lruc, k));
-    printf("Found v=%s\n", v);
-    printf("###################\n");
-
-    for(i=10; i < 15; i++) {
-        printf("Inserting (key,val)\n");
-        fflush(stdout);
-        sprintf(k, "key%d", (i+1));
-        sprintf(v, "value%d", (i+1));
-        lruc_insert_str(lruc, k, v);
-        print_ht(lruc->ht);
-        printf("###################\n");
-
-    }
-
-    print_ht(lruc->ht);
-    print_lruc(lruc);
-
-    for(i=6; i < 13; i++) {
-        sprintf(k, "key%d", i);
-        printf("Searchign for k=%s\n", k);
-        strcpy(v, lruc_search_str(lruc, k));
-        printf("Found v=%s\n", v);
-        printf("###################\n");
-    }
-
-    print_ht(lruc->ht);
-    print_lruc(lruc);
-    printf("###################\n");
-
-    for(i=16; i < 18; i++) {
-        printf("Inserting (key,val)\n");
-        fflush(stdout);
-        sprintf(k, "key%d", i);
-        sprintf(v, "value%d", i);
-        lruc_insert_str(lruc, k, v);
-        print_ht(lruc->ht);
-        printf("###################\n");
-
-    }
-
-    print_ht(lruc->ht);
-    print_lruc(lruc);
-    printf("###################\n");
-
-    sprintf(k, "key%d", 1);
-    printf("Searchign for k=%s\n", k);
-    if(lruc_search_str(lruc, k)!=NULL) {
-        strcpy(v, lruc_search_str(lruc, k));
-        printf("Found v=%s\n", v);
-    }
-    printf("###################\n");
-
-    lruc_destroy(lruc);
-    printf("Destroyed!\n");
-
-}
-**/
 

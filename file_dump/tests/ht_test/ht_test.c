@@ -12,7 +12,7 @@
 #include <string.h>
 #include <stdbool.h>
 
-#include "../../hash_table.h"
+#include "../../ghash_table.h"
 
 #define MAX_URL_LEN 512
 #define MAX_UA_LEN 32
@@ -66,16 +66,16 @@ size_t sizeof_http_req_value_dyn(http_req_value_dyn_t* v) {
 
 void test1() {
 
-    char key[MAX_KEY_LEN+1];
+    char key[MAX_GHT_KEY_LEN+1];
     void* value = NULL;
 
-    hash_table_t* ht = ht_init(0, true, true, true, true, 
+    ghash_table_t* ht = ght_init(0, true, true, true, true, 
                                sizeof(http_req_value_t), NULL, NULL); 
 
     http_req_value_t v;
 
-    strncpy(key,"127.0.0.1",MAX_KEY_LEN);
-    key[MAX_KEY_LEN]='\0';
+    strncpy(key,"127.0.0.1",MAX_GHT_KEY_LEN);
+    key[MAX_GHT_KEY_LEN]='\0';
     strncpy(v.url,"/test1/test2/test3.php",MAX_URL_LEN);
     v.url[MAX_URL_LEN]='\0';
     strncpy(v.ua,"Chrome",MAX_UA_LEN);
@@ -93,30 +93,30 @@ void test1() {
         value = (void*)&v;
 
         printf("Inserting key:%s\n", key);
-        ht_insert(ht, key, value);
+        ght_insert(ht, key, value);
 
-        http_req_value_t* p = ht_search(ht,key);
+        http_req_value_t* p = ght_search(ht,key);
         printf("key:%s, url:%s, ua:%s\n", key, p->url, p->ua);
     }
 
     print_ht(ht);
 
-    ht_delete(ht, key);
+    ght_delete(ht, key);
 
-    ht_destroy(ht);
+    ght_destroy(ht);
 }
 
 
 void test2() {
 
-    char key[MAX_KEY_LEN+1];
+    char key[MAX_GHT_KEY_LEN+1];
 
-    hash_table_t* ht = ht_init(0, true, true, true, true, sizeof(http_req_value_dyn_t), copy_http_req_value_dyn, destroy_http_req_value_dyn); 
+    ghash_table_t* ht = ght_init(0, true, true, true, true, sizeof(http_req_value_dyn_t), copy_http_req_value_dyn, destroy_http_req_value_dyn); 
 
     http_req_value_dyn_t v;
 
-    strncpy(key,"127.0.0.1",MAX_KEY_LEN);
-    key[MAX_KEY_LEN]='\0';
+    strncpy(key,"127.0.0.1",MAX_GHT_KEY_LEN);
+    key[MAX_GHT_KEY_LEN]='\0';
 
     v.url = (char*)malloc(sizeof(char)*MAX_URL_LEN+1);
     v.ua = (char*)malloc(sizeof(char)*MAX_UA_LEN+1);
@@ -136,18 +136,18 @@ void test2() {
         v.ua[ua_len] = (char)(48+i); v.ua[ua_len+1]='\0'; 
 
         printf("Inserting key:%s\n", key);
-        ht_insert(ht, key, (void*)&v);
+        ght_insert(ht, key, (void*)&v);
 
-        void* value = ht_search(ht,key);
+        void* value = ght_search(ht,key);
         http_req_value_dyn_t* p = (http_req_value_dyn_t*)value;
         printf("key:%s, url:%s, ua:%s\n", key, p->url, p->ua);
     }
 
     print_ht(ht);
 
-    ht_delete(ht, key);
+    ght_delete(ht, key);
 
-    ht_destroy(ht);
+    ght_destroy(ht);
 
     free(v.url);
     free(v.ua);

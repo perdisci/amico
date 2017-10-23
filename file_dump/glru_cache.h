@@ -1,5 +1,5 @@
 /*
- *   This is an implementation of a generic LRU cache.
+ *   This is an implementation of a generic O(1) LRU cache.
  *   Copyright (C) 2010  Roberto Perdisci (perdisci@cs.uga.edu)
  *
  *   This program is free software: you can redistribute it and/or modify
@@ -19,47 +19,52 @@
 #ifndef __GLRU_CACHE__
 #define __GLRU_CACHE__
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdbool.h>
+#include <stdint.h>
+#include <stdbool.h> 
+#include "ghash_table.h""
 
-#define MAX_LRUC_TTL 5*60 // 5 minutes
-
-typedef unsigned int u_int;
+#define MAX_GLRUC_TTL 5*60 // 5 minutes
 
 typedef struct glruc_entry {
 
-    char* key;
+    char *key;
     void *value;
     time_t time;
-    struct lruc_entry *prev;
-    struct lruc_entry *next;
+    struct glruc_entry *prev;
+    struct glruc_entry *next;
 
 } glruc_entry_t;
 
 typedef struct glru_cache {
 
-    lruc_entry_t *top; // pointer to the top of the LRU cache
-    void (*destroy_val_fn)(void*); // callback function for destroying an entry value
+    glruc_entry_t* top; // pointer to the top of the LRU cache
+    ghash_table_t* ht;  // pointer to the Hash Table for O(1) searches
+    size_t num_entries;
+    size_t max_entries;
 
-    u_int num_entries;
-    u_int max_entries;
+    bool copy_keys;
+    bool copy_values;
+    bool destroy_keys;
+    bool destroy_values;
+    size_t sizeof_values;
+    void (*copy_val_fn)(void*, void*);
+    void (*destroy_val_fn)(void*);
 
 } glru_cache_t;
 
-glru_cache_t* glruc_init(u_int max_entries, bool destroy_keys, bool destroy_values, 
-                         void (*destroy_val_fn)(void*));
+glru_cache_t*
+glruc_init(uint32_t length, bool copy_keys, bool copy_values,
+            bool destroy_keys, bool destroy_values, size_t sizeof_values,
+            void (*copy_val_fn)(void*,void*), void (*destroy_val_fn)(void*));
 
-int glruc_insert(glru_cache_t *lruc, char *key, void* value, bool copy, size_t value_size);
-void glruc_delete(glru_cache_t *lruc, glruc_entry_t* ptr);
+int glruc_insert(glru_cache_t *lruc, char *key, void* value);
+void* glruc_search(glru_cache_t *lruc, const char *key);
 void glruc_delete(glru_cache_t *lruc, char *key);
 void glruc_destroy(glru_cache_t *lruc);
-void* glruc_search(glru_cache_t *lruc, const char *key);
+void glruc_prune(glru_cache_t *lruc);
 
-void glruc_prune(lru_cache_t *lruc);
-
-void print_lruc(lru_cache_t *lruc);
+void print_glruc(glru_cache_t *lruc);
 
 
 #endif // __GLRU_CACHE__
+

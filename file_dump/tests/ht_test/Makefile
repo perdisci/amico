@@ -1,4 +1,4 @@
-OBJ = ht_test.o ../../hash_table.o
+OBJ = ht_test.o ../../ghash_table.o
 CFLAGS = -Wall -g -O0
 CC = gcc
 INCLUDE =
