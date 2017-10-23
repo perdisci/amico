@@ -21,9 +21,10 @@
 
 #include <stdint.h>
 #include <stdbool.h> 
-#include "ghash_table.h""
+#include "ghash_table.h"
 
-#define MAX_GLRUC_TTL 5*60 // 5 minutes
+#define MAX_GLRUC_KEY_LEN MAX_GHT_KEY_LEN
+#define MAX_GLRUC_TTL 10*60 // 10 minutes
 
 typedef struct glruc_entry {
 
@@ -39,6 +40,8 @@ typedef struct glru_cache {
 
     glruc_entry_t* top; // pointer to the top of the LRU cache
     ghash_table_t* ht;  // pointer to the Hash Table for O(1) searches
+
+    uint16_t ttl;
     size_t num_entries;
     size_t max_entries;
 
@@ -53,12 +56,12 @@ typedef struct glru_cache {
 } glru_cache_t;
 
 glru_cache_t*
-glruc_init(uint32_t length, bool copy_keys, bool copy_values,
+glruc_init(size_t max_entries, uint16_t ttl, bool copy_keys, bool copy_values,
             bool destroy_keys, bool destroy_values, size_t sizeof_values,
             void (*copy_val_fn)(void*,void*), void (*destroy_val_fn)(void*));
 
 int glruc_insert(glru_cache_t *lruc, char *key, void* value);
-void* glruc_search(glru_cache_t *lruc, const char *key);
+glruc_entry_t* glruc_search(glru_cache_t *lruc, const char *key);
 void glruc_delete(glru_cache_t *lruc, char *key);
 void glruc_destroy(glru_cache_t *lruc);
 void glruc_prune(glru_cache_t *lruc);

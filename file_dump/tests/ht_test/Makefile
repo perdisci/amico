@@ -8,4 +8,4 @@ ht_test: ${OBJ}
 	${CC} ${CFLAGS} ${INCLUDES} -o $@ ${OBJ} ${LIB}
 
 clean:
-	rm -f *.o ht_test
+	rm -f *.o ../../*.o ht_test

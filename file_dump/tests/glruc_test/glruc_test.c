@@ -5,15 +5,18 @@
  */
 
 // To use Valgrind:
-// G_SLICE=always-malloc G_DEBUG=gc-friendly  valgrind -v --tool=memcheck --leak-check=full --num-callers=40 --log-file=valgrind.log ./ht_test
+// G_SLICE=always-malloc G_DEBUG=gc-friendly  valgrind -v --tool=memcheck --leak-check=full --num-callers=40 --log-file=valgrind.log ./glruc_test
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
 
-#include "../../ghash_table.h"
+#include <unistd.h>
 
+#include "../../glru_cache.h"
+
+#define MAX_KEY_LEN MAX_GLRUC_KEY_LEN
 #define MAX_URL_LEN 512
 #define MAX_UA_LEN 32
 
@@ -66,23 +69,23 @@ size_t sizeof_http_req_value_dyn(http_req_value_dyn_t* v) {
 
 void test1() {
 
-    char key[MAX_GHT_KEY_LEN+1];
+    char key[MAX_KEY_LEN+1];
     void* value = NULL;
 
-    ghash_table_t* ht = ght_init(0, true, true, true, true, 
+    glru_cache_t* lruc = glruc_init(0, 1, true, true, true, true, 
                                sizeof(http_req_value_t), NULL, NULL); 
 
     http_req_value_t v;
 
-    strncpy(key,"127.0.0.1",MAX_GHT_KEY_LEN);
-    key[MAX_GHT_KEY_LEN]='\0';
+    strncpy(key,"127.0.0.1",MAX_KEY_LEN);
+    key[MAX_KEY_LEN]='\0';
     strncpy(v.url,"/test1/test2/test3.php",MAX_URL_LEN);
     v.url[MAX_URL_LEN]='\0';
     strncpy(v.ua,"Chrome",MAX_UA_LEN);
     v.ua[MAX_UA_LEN]='\0';
 
     int i;
-    for(i=0; i<10; i++) {
+    for(i=0; i<20; i++) {
         int key_len = strlen(key);
         key[key_len] = (char)(48+i); key[key_len+1]='\0'; 
         int url_len = strlen(v.url);
@@ -93,33 +96,39 @@ void test1() {
         value = (void*)&v;
 
         printf("Inserting key:%s\n", key);
-        ght_insert(ht, key, value);
+        glruc_insert(lruc, key, value);
 
-        ght_entry_t* p = ght_search(ht,key);
-        if(p!=NULL) {
-            http_req_value_t* r = (http_req_value_t*)p->value;
-            printf("key:%s, url:%s, ua:%s\n", key, r->url, r->ua);
+        printf("Printing HT...\n");
+        print_ght(lruc->ht);
+
+        glruc_entry_t* l = glruc_search(lruc,key);
+        if(l != NULL) {
+            http_req_value_t* p = l->value; 
+            printf("key:%s, url:%s, ua:%s\n", key, p->url, p->ua);
         }
+      printf("number of entries: %lu\n", lruc->num_entries);
+
+      sleep(3);
     }
 
-    print_ght(ht);
+    print_glruc(lruc);
 
-    ght_delete(ht, key);
+    glruc_delete(lruc, key);
 
-    ght_destroy(ht);
+    glruc_destroy(lruc);
 }
 
-
+/*
 void test2() {
 
-    char key[MAX_GHT_KEY_LEN+1];
+    char key[MAX_KEY_LEN+1];
 
-    ghash_table_t* ht = ght_init(0, true, true, true, true, sizeof(http_req_value_dyn_t), copy_http_req_value_dyn, destroy_http_req_value_dyn); 
+    hash_table_t* ht = ht_init(0, true, true, true, true, sizeof(http_req_value_dyn_t), copy_http_req_value_dyn, destroy_http_req_value_dyn); 
 
     http_req_value_dyn_t v;
 
-    strncpy(key,"127.0.0.1",MAX_GHT_KEY_LEN);
-    key[MAX_GHT_KEY_LEN]='\0';
+    strncpy(key,"127.0.0.1",MAX_KEY_LEN);
+    key[MAX_KEY_LEN]='\0';
 
     v.url = (char*)malloc(sizeof(char)*MAX_URL_LEN+1);
     v.ua = (char*)malloc(sizeof(char)*MAX_UA_LEN+1);
@@ -139,25 +148,24 @@ void test2() {
         v.ua[ua_len] = (char)(48+i); v.ua[ua_len+1]='\0'; 
 
         printf("Inserting key:%s\n", key);
-        ght_insert(ht, key, (void*)&v);
+        ht_insert(ht, key, (void*)&v);
 
-        ght_entry_t* e = ght_search(ht,key);
-        if(e!=NULL) {
-            http_req_value_dyn_t* r = (http_req_value_dyn_t*)e->value;
-            printf("key:%s, url:%s, ua:%s\n", key, r->url, r->ua);
-        }
+        void* value = ht_search(ht,key);
+        http_req_value_dyn_t* p = (http_req_value_dyn_t*)value;
+        printf("key:%s, url:%s, ua:%s\n", key, p->url, p->ua);
     }
 
-    print_ght(ht);
+    print_ht(ht);
 
-    ght_delete(ht, key);
+    ht_delete(ht, key);
 
-    ght_destroy(ht);
+    ht_destroy(ht);
 
     free(v.url);
     free(v.ua);
 
 }
+*/
 
 
 int main() {
@@ -165,8 +173,8 @@ int main() {
     printf("\n\n== RUNNING TEST1 ==\n\n");
     test1();
 
-    printf("\n\n== RUNNING TEST2 ==\n\n");
-    test2();
+//    printf("\n\n== RUNNING TEST2 ==\n\n");
+//    test2();
     
     return 1;
 }
