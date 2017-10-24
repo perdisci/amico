@@ -1,5 +1,5 @@
 /*
- *   This is an implementation of a O(1) LRU cache.
+ *   This is an implementation of an FIFO queue.
  *   Copyright (C) 2010  Roberto Perdisci (perdisci@cs.uga.edu)
  *
  *   This program is free software: you can redistribute it and/or modify
@@ -23,194 +23,141 @@
 #include "fifo_queue.h"
 
 
-/* Initializes the queue */
-// NOTE(Roberto): destroy_values only means a "shallow" destroy
-//  if value contains dynamically allocated objects, these will not 
-//  be destroyed. This HT needs to be extended to handle those cases.
-hash_table_t* ht_init(u_int max_len, short destroy_values) {
+/* Initializes the FIFO queue */
+fifo_queue_t* fifoq_init(size_t max_length,
+                      bool copy_values,
+                      bool destroy_values, 
+                      size_t sizeof_values,
+                      void (*copy_val_fn)(void*,void*),
+                      void (*destroy_val_fn)(void*)) {
     
-    fifo_queue_t* q = (fifo_queue_t*)malloc(sizeof(fifo_queue_t));
-    if(max_len>0)
-        q->max_len = max_len;;
-    else
-        q->max_len = MAX_QUEUE_LEN;
-    q->destroy_values = destroy_values;
 
-    q->curr_len = 0;
-    q->head = NULL;
-    q->tail = NULL;
+    fifo_queue_t* q = (fifo_queue_t*)malloc(sizeof(fifo_queue_t));
+
+    if(length>0)
+        q->max_length = max_length;
+    else
+        q->max_length = DEFAULT_FIFOQ_LENGTH;
+    q->num_elements = 0;
+
+    q->first = NULL;
+    q->last = NULL;
+
+    q->copy_values = copy_values;
+    q->destroy_values = destroy_values;
+    q->sizeof_values = sizeof_values;
+    q->copy_val_fn = copy_val_fn;
+    q->destroy_val_fn = destroy_val_fn;
 
     return q;
-
 }
 
 
-/* Deallocate memory for Queue */
-void ht_destroy(fifo_queue_t* q) {
+/* Deallocate memory for FIFO queue */
+void fifoq_destroy(fifo_queue_t* q) {
 
-    queue_entry_t *v;
-    u_int i;
 
     if(q == NULL)
         return;
 
-    v = q->head;
+    fifoq_entry_t *v = q->first;
+
     while(v != NULL) {
-        queue_entry_t *p = v;
-        v = v->next;
-        if(q->destroy_values)
-            free(p->value);
-        free(p);
+        fifoq_entry_t* p = v;
+        v = v->prev;
+        fifoq_delete_element(p);
     }
    
-    free(q); 
-
+    free(q);
 }
 
 
-void queue_insert(fifo_queue_t* q, void* value, short copy, size_t value_size) {
+void fifoq_insert(fifo_queue_t* q, void* value) {
 
-    queue_entry_t *v = q->tail;
+    fifoq_entry_t *e = (fifoq_entry_t*)malloc(sizeof(fifoq_entry_t));
 
-    queue_entry_t *e = (queue_entry_t*)malloc(sizeof(queue_entry_t));
-
-    if(copy) {
-        e->value = (void*)malloc(value_size);
-        memcpy(e->value,value,value_size);
+    if(q->copy_values) {
+        e->value = (void*)malloc(q->sizeof_values);
+        if(q->copy_val_fn != NULL) { // Deep copy:
+            q->copy_val_fn(e->value, value);
+        }
+        else // Shallow copy:
+            memcpy(e->value,value,q->sizeof_values);
     }
     else {
         e->value = value;
     }
 
+    e->prev = NULL;
     e->next = NULL;
 
-    if(q->head == NULL) {
-        q->head = e;
-        q->tail = e;
+    if(first == NULL) { // empty queue
+        q->first = e;
+        q->last  = e;
     }
     else {
-        q->tail->next = e;
-        q->tail = e;
-    }
-    q->curr_len++;
-        
-    if(q->curr_len >= q->max_len) {
-        queue_delete_head(q);
+        q->last->prev = e;
+        e->next = q->last;   
+        q->last = e;
+        q->num_elements++;
+
+        if(q->num_elements > q->max_length) {
+            // remove first element
+
+            fifoq_entry_t *f = q->first;
+            fifoq_entry_t *s = q->first->prev; 
+
+            s->next = NULL;
+            q->first = s;
+            fifoq_delete_element(f);
+            q->num_elements--; 
+        }
     }
 }
 
-/* Remove head and return its value */
-void* queue_pop(fifo_queue_t* q) {
 
-    if(q->head == NULL)
-        return NULL;
+void fifoq_delete_element(fifoq_entry_t* e) {
 
-    queue_entry_t *v = q->head;
-    q->head = v->next;
-    return v;
-    
-    u_int i = 0;
-    ht_entry_t *prev;
-
-    u_int h = hash_fn(key) % ht->length;
-    #ifdef LRUC_DEBUG 
-        printf("key=%s, h=%u\n", key, h);
-    #endif
-
-    v = ht->vect[h];
-    prev = NULL;
-    if(v != NULL) {
-        do {
-            if(strcmp(key, v->key) == 0) {
-                if(prev != NULL)
-                    prev->next = v->next;
-                else if(v->next != NULL)
-                    ht->vect[h] = v->next;
-                else
-                    ht->vect[h] = NULL;
-                if(ht->destroy_keys)
-                    free(v->key);
-                if(ht->destroy_values)
-                    free(v->value);
-                free(v);
-                return;
-            }
-            prev = v;    
-            v = v->next;
-        } while(v != NULL);
+    if(e != NULL) {
+        if(q->destroy_values) {
+            if(q->destroy_val_fn != NULL)
+                q->destroy_val_fn(e->value);
+            free(e->value);
+        }
+        free(e);
+        return;
     }
-    
-    return;
-
 }
 
-void* ht_search(const hash_table_t *ht, const char *key) {
+/* Searches FIFO queue */
+fifoq_entry_t* fifoq_search(const fifo_queue_t *q) {
 
-    ht_entry_t *v;
+    fifoq_entry_t *v;
 
-    u_int h = hash_fn(key) % ht->length;
-    v = ht->vect[h];
-
-    if(v == NULL) 
-        return NULL;
+    uint32_t h = _ghash_fn(key) % q->length;
+    v = q->vect[h];
 
     while(v != NULL) {
         if(strcmp(key, v->key) == 0)
-            return v->value;
+            return v;
         v = v->next;
     }
 
     return NULL;
 }
 
+void print_queue(fifo_queue_t *q) {   
 
-u_int hash_fn(const char* key) {
-
-    #define MAX_HASH_ITER 256
-    return DJBHash(key, strnlen(key, MAX_HASH_ITER));
-
-}
+    fifoq_entry_t* v = q->first;
 
 
-/* The following hash function has been borrowed
- * and slightly modified from
- * http://www.partow.net/programming/hashfunctions/
- * Author: Arash Partow
- */
-u_int DJBHash(const char* str, u_int len)
-{
-   u_int hash = 5381;
-   u_int i    = 0;
-
-   for(i = 0; i < len; i++)
-   {
-      hash = ((hash << 5) + hash) + (str[i]);
-   }
-
-   return hash;
-}
-/***/
-
-
-void print_ht(hash_table_t *ht) {   
-
-    ht_entry_t *v;
-    u_int i;
-
-    if(ht == NULL)
-        return;
-
-    for(i=0; i < ht->length; i++) {
-        v = ht->vect[i];
-        if(v != NULL) {
-            printf("HASH_TAB_ENTRY: %s", v->key);
-            while(v->next!=NULL) {
-                v = v->next;
-                printf(" | %s", v->key);
-            }
-            printf("\n");
-        }
+    printf("=================\n");
+    uint16_t i = 0;
+    while(v!=NULL) {
+        printf("%u:(%p)\n", i++, v);
+        v = v->prev;
     }
+    printf("=================\n");
 
 }
 
