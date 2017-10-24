@@ -22,7 +22,7 @@
 #include <time.h>
 #include "glru_cache.h"
 
-#define GLRUC_DEBUG
+// #define GLRUC_DEBUG
 #define GHT_SIZE_FACTOR 3
 #define GLRUC_MIN_ENTRIES 10
 
@@ -171,7 +171,6 @@ int glruc_insert(glru_cache_t *lruc, char *key, void* value) {
     }
 
     lruc->top = e;
-    printf("LRUC: Inserted element (e:%p) (e->key:%p)\n",e,e->key);
 
     /* Insert e in the Hash Table for fast, O(1) searches */
     ght_insert(lruc->ht, e->key, e);
@@ -191,13 +190,11 @@ int glruc_insert(glru_cache_t *lruc, char *key, void* value) {
 // Delete an entry from the LRU cache
 void glruc_delete(glru_cache_t *lruc, char *key) {
 
-    printf("Searching for: %s\n", key);
     ght_entry_t* h = ght_search(lruc->ht, key);
     if(h == NULL)
         return;
 
     glruc_entry_t* e = h->value;
-    printf("Deleting entry: %s\n", e->key);
 
     if(e!=NULL) {
         if(lruc->top == e && lruc->top->next == e) // only one entry!
@@ -236,7 +233,6 @@ glruc_entry_t* glruc_search(glru_cache_t *lruc, const char *key) {
     if(h == NULL)
         return NULL;
 
-    printf("glruc_search: glruc_entry_t (h->key=%p)\n", h->key);
     glruc_entry_t* e = h->value;
 
     #ifdef GLRUC_DEBUG

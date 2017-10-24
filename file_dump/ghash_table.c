@@ -105,7 +105,6 @@ void ght_insert(ghash_table_t *ht, char *key, void* value) {
     else {
         e->key = key;
     }
-    printf("HT: inserting key: %s\n", e->key);
 
     if(ht->copy_values) {
         e->value = (void*)malloc(ht->sizeof_values);
@@ -124,7 +123,6 @@ void ght_insert(ghash_table_t *ht, char *key, void* value) {
     v = ht->vect[h];
     if(v == NULL) {
         ht->vect[h] = e;
-        printf("HT: Inserted element (e:%p) (e->key:%p) (e->value:%p)\n",e,e->key,e->value);
         return;
     }
 
@@ -141,9 +139,6 @@ void ght_delete(ghash_table_t *ht, char *key) {
     ght_entry_t *prev;
 
     uint32_t h = _ghash_fn(key) % ht->length;
-    #ifdef LRUC_DEBUG 
-        printf("key=%s, h=%u\n", key, h);
-    #endif
 
     v = ht->vect[h];
     prev = NULL;

@@ -85,7 +85,7 @@ void test1() {
     v.ua[MAX_UA_LEN]='\0';
 
     int i;
-    for(i=0; i<20; i++) {
+    for(i=0; i<10; i++) {
         int key_len = strlen(key);
         key[key_len] = (char)(48+i); key[key_len+1]='\0'; 
         int url_len = strlen(v.url);
@@ -108,7 +108,7 @@ void test1() {
         }
       printf("number of entries: %lu\n", lruc->num_entries);
 
-      sleep(3);
+      sleep(1);
     }
 
     print_glruc(lruc);
@@ -118,12 +118,11 @@ void test1() {
     glruc_destroy(lruc);
 }
 
-/*
 void test2() {
 
     char key[MAX_KEY_LEN+1];
 
-    hash_table_t* ht = ht_init(0, true, true, true, true, sizeof(http_req_value_dyn_t), copy_http_req_value_dyn, destroy_http_req_value_dyn); 
+    glru_cache_t* lruc = glruc_init(0, 10, true, true, true, true, sizeof(http_req_value_dyn_t), copy_http_req_value_dyn, destroy_http_req_value_dyn); 
 
     http_req_value_dyn_t v;
 
@@ -147,25 +146,35 @@ void test2() {
         int ua_len = strlen(v.ua);
         v.ua[ua_len] = (char)(48+i); v.ua[ua_len+1]='\0'; 
 
-        printf("Inserting key:%s\n", key);
-        ht_insert(ht, key, (void*)&v);
+        void* value = (void*)&v;
 
-        void* value = ht_search(ht,key);
-        http_req_value_dyn_t* p = (http_req_value_dyn_t*)value;
-        printf("key:%s, url:%s, ua:%s\n", key, p->url, p->ua);
+        printf("Inserting key:%s\n", key);
+        glruc_insert(lruc, key, value);
+
+        printf("Printing HT...\n");
+        print_ght(lruc->ht);
+
+        glruc_entry_t* l = glruc_search(lruc,key);
+        if(l != NULL) {
+            http_req_value_dyn_t* p = l->value; 
+            printf("key:%s, url:%s, ua:%s\n", key, p->url, p->ua);
+        }
+
+        printf("number of entries: %lu\n", lruc->num_entries);
+
+        sleep(1);
     }
 
-    print_ht(ht);
+    print_glruc(lruc);
 
-    ht_delete(ht, key);
+    glruc_delete(lruc, key);
 
-    ht_destroy(ht);
+    glruc_destroy(lruc);
 
     free(v.url);
     free(v.ua);
 
 }
-*/
 
 
 int main() {
@@ -173,8 +182,8 @@ int main() {
     printf("\n\n== RUNNING TEST1 ==\n\n");
     test1();
 
-//    printf("\n\n== RUNNING TEST2 ==\n\n");
-//    test2();
+    printf("\n\n== RUNNING TEST2 ==\n\n");
+    test2();
     
     return 1;
 }
