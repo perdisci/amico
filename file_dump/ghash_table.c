@@ -46,6 +46,7 @@ ghash_table_t* ght_init(size_t length,
     ht->sizeof_values = sizeof_values;
     ht->copy_val_fn = copy_val_fn;
     ht->destroy_val_fn = destroy_val_fn;
+
     ht->vect = (ght_entry_t**)malloc(sizeof(ght_entry_t*) * ht->length);
 
     int i;    
@@ -80,12 +81,10 @@ void ght_destroy(ghash_table_t* ht) {
             free(p);
         }
     }
-   
+
     free(ht->vect);
-    ht->vect = NULL;
 
     free(ht); 
-
 }
 
 

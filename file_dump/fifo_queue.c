@@ -1,6 +1,6 @@
 /*
  *   This is an implementation of an FIFO queue.
- *   Copyright (C) 2010  Roberto Perdisci (perdisci@cs.uga.edu)
+ *   Copyright (C) 2017  Roberto Perdisci (perdisci@cs.uga.edu)
  *
  *   This program is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -34,7 +34,7 @@ fifo_queue_t* fifoq_init(size_t max_length,
 
     fifo_queue_t* q = (fifo_queue_t*)malloc(sizeof(fifo_queue_t));
 
-    if(length>0)
+    if(max_length>0)
         q->max_length = max_length;
     else
         q->max_length = DEFAULT_FIFOQ_LENGTH;
@@ -42,6 +42,7 @@ fifo_queue_t* fifoq_init(size_t max_length,
 
     q->first = NULL;
     q->last = NULL;
+    q->cursor=NULL;
 
     q->copy_values = copy_values;
     q->destroy_values = destroy_values;
@@ -53,9 +54,7 @@ fifo_queue_t* fifoq_init(size_t max_length,
 }
 
 
-/* Deallocate memory for FIFO queue */
 void fifoq_destroy(fifo_queue_t* q) {
-
 
     if(q == NULL)
         return;
@@ -65,7 +64,7 @@ void fifoq_destroy(fifo_queue_t* q) {
     while(v != NULL) {
         fifoq_entry_t* p = v;
         v = v->prev;
-        fifoq_delete_element(p);
+        fifoq_delete_element(q,p);
     }
    
     free(q);
@@ -91,7 +90,8 @@ void fifoq_insert(fifo_queue_t* q, void* value) {
     e->prev = NULL;
     e->next = NULL;
 
-    if(first == NULL) { // empty queue
+    q->num_elements++;
+    if(q->first == NULL) { // empty queue
         q->first = e;
         q->last  = e;
     }
@@ -99,7 +99,6 @@ void fifoq_insert(fifo_queue_t* q, void* value) {
         q->last->prev = e;
         e->next = q->last;   
         q->last = e;
-        q->num_elements++;
 
         if(q->num_elements > q->max_length) {
             // remove first element
@@ -109,14 +108,14 @@ void fifoq_insert(fifo_queue_t* q, void* value) {
 
             s->next = NULL;
             q->first = s;
-            fifoq_delete_element(f);
+            fifoq_delete_element(q,f);
             q->num_elements--; 
         }
     }
 }
 
 
-void fifoq_delete_element(fifoq_entry_t* e) {
+void fifoq_delete_element(fifo_queue_t* q, fifoq_entry_t* e) {
 
     if(e != NULL) {
         if(q->destroy_values) {
@@ -125,40 +124,46 @@ void fifoq_delete_element(fifoq_entry_t* e) {
             free(e->value);
         }
         free(e);
+    }
+}
+
+void* fifoq_get_first_value(fifo_queue_t *q) {
+    return q->first->value;
+}
+
+void* fifoq_get_last_value(fifo_queue_t *q) {
+    return q->last->value;
+}
+
+void* fifoq_get_next_value(fifo_queue_t *q) {
+    if(q->cursor == NULL)
+        return NULL;
+
+    fifoq_entry_t* v = q->cursor;
+    q->cursor = q->cursor->prev;
+    return v->value;
+}
+
+void fifoq_reset_cursor(fifo_queue_t *q) {
+    q->cursor = q->first;
+}
+
+void print_fifoq(fifo_queue_t *q, void (*print_val_fn)(void*)) {   
+    
+    if(q == NULL)
         return;
-    }
-}
-
-/* Searches FIFO queue */
-fifoq_entry_t* fifoq_search(const fifo_queue_t *q) {
-
-    fifoq_entry_t *v;
-
-    uint32_t h = _ghash_fn(key) % q->length;
-    v = q->vect[h];
-
-    while(v != NULL) {
-        if(strcmp(key, v->key) == 0)
-            return v;
-        v = v->next;
-    }
-
-    return NULL;
-}
-
-void print_queue(fifo_queue_t *q) {   
 
     fifoq_entry_t* v = q->first;
-
 
     printf("=================\n");
     uint16_t i = 0;
     while(v!=NULL) {
-        printf("%u:(%p)\n", i++, v);
+        printf("%u:(%p) :: ", i++, v);
+        print_val_fn(v->value);
+        printf("\n");
         v = v->prev;
     }
     printf("=================\n");
 
 }
-
 

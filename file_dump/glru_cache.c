@@ -56,7 +56,7 @@ glru_cache_t* glruc_init(size_t max_entries, uint16_t ttl,
         lruc->max_entries = max_entries;
 
     lruc->ht = ght_init(max_entries*GHT_SIZE_FACTOR, 
-                            false, false, false, false, 0, NULL, NULL);
+                           false, false, false, false, 0, NULL, NULL);
 
     return lruc;
 }
@@ -65,48 +65,44 @@ glru_cache_t* glruc_init(size_t max_entries, uint16_t ttl,
 /* Deallocate memory for LRU cache */
 void glruc_destroy(glru_cache_t *lruc) {
 
-    if(lruc == NULL)
-        return;
+    if(lruc == NULL && lruc->top == NULL) {
 
-    if(lruc->top == NULL)
-        return;
-
-    if(lruc->top->prev == NULL) { // only one entry...
-        if(lruc->destroy_keys)
-            free(lruc->top->key);
-        if(lruc->top->value != NULL) {
-            if(lruc->destroy_values) {
-                if(lruc->destroy_val_fn != NULL)
-                    lruc->destroy_val_fn(lruc->top->value);
-                free(lruc->top->value);
+        if(lruc->top->prev == NULL) { // only one entry...
+            if(lruc->destroy_keys)
+                free(lruc->top->key);
+            if(lruc->top->value != NULL) {
+                if(lruc->destroy_values) {
+                    if(lruc->destroy_val_fn != NULL)
+                        lruc->destroy_val_fn(lruc->top->value);
+                    free(lruc->top->value);
+                }
             }
+            free(lruc->top);
+            return;
         }
-        free(lruc->top);
-        return;
-    }
 
-    lruc->top->prev->next = NULL; // break the circular list
-    while(lruc->top != NULL) {
-        glruc_entry_t *t = lruc->top;
-        lruc->top = lruc->top->next; 
-        if(lruc->destroy_keys)
-            free(t->key);
-        if(t->value != NULL) {
-            if(lruc->destroy_values) {
-                if(lruc->destroy_val_fn != NULL)
-                    lruc->destroy_val_fn(t->value);
-                free(t->value);
+        lruc->top->prev->next = NULL; // break the circular list
+        while(lruc->top != NULL) {
+            glruc_entry_t *t = lruc->top;
+            lruc->top = lruc->top->next; 
+            if(lruc->destroy_keys)
+                free(t->key);
+            if(t->value != NULL) {
+                if(lruc->destroy_values) {
+                    if(lruc->destroy_val_fn != NULL)
+                        lruc->destroy_val_fn(t->value);
+                    free(t->value);
+                }
+                t->value = NULL;
             }
-            t->value = NULL;
+            free(t);
         }
-        free(t);
+
     }
 
     ght_destroy(lruc->ht);
-    lruc->ht = NULL;
 
     free(lruc);
-
 }
 
 
