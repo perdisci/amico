@@ -76,7 +76,8 @@ void ght_destroy(ghash_table_t* ht) {
             if(ht->destroy_values) {
                 if(ht->destroy_val_fn != NULL)
                     ht->destroy_val_fn(p->value);
-                free(p->value);
+                else
+                    free(p->value);
             }
             free(p);
         }
@@ -155,7 +156,8 @@ void ght_delete(ghash_table_t *ht, char *key) {
                 if(ht->destroy_values) {
                     if(ht->destroy_val_fn != NULL)
                         ht->destroy_val_fn(v->value);
-                    free(v->value);
+                    else
+                        free(v->value);
                 }
                 free(v);
                 return;
@@ -223,7 +225,7 @@ void print_ght(ghash_table_t *ht) {
     if(ht == NULL)
         return;
 
-    printf("=================\n");
+    printf("=HT==============\n");
     for(i=0; i < ht->length; i++) {
         v = ht->vect[i];
         if(v != NULL) {

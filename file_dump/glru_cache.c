@@ -65,7 +65,7 @@ glru_cache_t* glruc_init(size_t max_entries, uint16_t ttl,
 /* Deallocate memory for LRU cache */
 void glruc_destroy(glru_cache_t *lruc) {
 
-    if(lruc == NULL && lruc->top == NULL) {
+    if(lruc != NULL && lruc->top != NULL) {
 
         if(lruc->top->prev == NULL) { // only one entry...
             if(lruc->destroy_keys)
@@ -74,7 +74,8 @@ void glruc_destroy(glru_cache_t *lruc) {
                 if(lruc->destroy_values) {
                     if(lruc->destroy_val_fn != NULL)
                         lruc->destroy_val_fn(lruc->top->value);
-                    free(lruc->top->value);
+                    else
+                        free(lruc->top->value);
                 }
             }
             free(lruc->top);
@@ -91,7 +92,8 @@ void glruc_destroy(glru_cache_t *lruc) {
                 if(lruc->destroy_values) {
                     if(lruc->destroy_val_fn != NULL)
                         lruc->destroy_val_fn(t->value);
-                    free(t->value);
+                    else
+                        free(t->value);
                 }
                 t->value = NULL;
             }
@@ -210,7 +212,8 @@ void glruc_delete(glru_cache_t *lruc, char *key) {
             if(lruc->destroy_values) {
                 if(lruc->destroy_val_fn != NULL)
                     lruc->destroy_val_fn(e->value);
-                free(e->value);
+                else
+                    free(e->value);
             }
         }
         free(e);
@@ -294,13 +297,12 @@ void print_glruc(glru_cache_t *lruc) {
 
     if(lruc->top == NULL)
         return;    
+    
+    print_ght(lruc->ht);
 
     glruc_entry_t *e = lruc->top;
-    
     do {
-        #ifdef GLRUC_DEBUG
-        printf("LRU_ENTRY: (k=%s)\n", e->key);
-        #endif
+        printf("LRU_ENTRY: %p (k=%s, v=%p)\n", e, e->key, e->value);
         e = e->next;
     } while(e != lruc->top);
 

@@ -155,7 +155,8 @@ void print_fifoq(fifo_queue_t *q, void (*print_val_fn)(void*)) {
 
     fifoq_entry_t* v = q->first;
 
-    printf("=================\n");
+    printf("=Q===============\n");
+    printf("Elements: %lu\n", q->num_elements);
     uint16_t i = 0;
     while(v!=NULL) {
         printf("%u:(%p) :: ", i++, v);
