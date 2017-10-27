@@ -222,6 +222,44 @@ void glruc_delete(glru_cache_t *lruc, char *key) {
     }
 }
 
+// Returns value associated to key
+// Removes entry from the LRU cache without deallocating value
+// Destroying value becomes responsibility of caller
+void* glruc_pop_value(glru_cache_t *lruc, char *key) {
+
+    void* ret_val = NULL;
+
+    ght_entry_t* h = ght_search(lruc->ht, key);
+    if(h == NULL)
+        return NULL;
+
+    glruc_entry_t* e = h->value;
+
+    if(e!=NULL) {
+        if(lruc->top == e && lruc->top->next == e) // only one entry!
+            lruc->top = NULL;
+        else {
+            if(lruc->top == e)
+                lruc->top = e->next;
+            
+            e->prev->next = e->next;
+            e->next->prev = e->prev;
+        }
+
+        ght_delete(lruc->ht, e->key);
+        if(lruc->destroy_keys)
+            free(e->key);
+        if(e->value != NULL) {
+            ret_val = e->value;
+            e->value = NULL;
+        }
+        free(e);
+
+        lruc->num_entries--;
+    }
+    
+    return ret_val;
+}
 
 glruc_entry_t* glruc_search(glru_cache_t *lruc, const char *key) {
 

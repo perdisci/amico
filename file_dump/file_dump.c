@@ -20,11 +20,13 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <stdbool.h>
 #include <unistd.h>
 #include <malloc.h>
 #include <errno.h>
 #include <signal.h>
 #include <time.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -137,6 +139,7 @@ struct tcp_header {
 // Other useful constants...
 #define KB_SIZE 1024
 #define MAX_FILE_DUMP_SIZE 2*KB_SIZE*KB_SIZE
+#define MAX_IP_LEN 15 // 3*4+3
 #define MAX_KEY_LEN 60 // larger than really needed
 #define MAX_URL_LEN 512
 #define MAX_UA_LEN 256
@@ -176,6 +179,9 @@ struct tcp_header {
 struct tcp_flow {
         short flow_state;
 
+        // Client srcIP -- used to track http request sequences
+        char srcip[MAX_IP_LEN+1];
+
         // Client->Server half-flow
         char cs_key[MAX_KEY_LEN+1];
         char anon_cs_key[MAX_KEY_LEN+1]; // anonymized cs_key
@@ -212,6 +218,7 @@ struct tcp_flow {
 #define DUMP_FILE_NAME_LEN 120
 struct dump_payload_thread {
         char dump_file_name[DUMP_FILE_NAME_LEN+1];
+        char srcip[MAX_IP_LEN+1];
         char url[MAX_URL_LEN+1];     // URL (including HTTP mothod and HTTP/1.x)
         char host[MAX_HOST_LEN+1];   // Host: header field
         char referer[MAX_REFERER_LEN+1];   // Referer: header field
@@ -219,6 +226,7 @@ struct dump_payload_thread {
         char *file_payload;
         u_int file_payload_size;
         seq_list_t *sc_seq_list;
+        fifo_queue_t* httpreq_list;
 };
 /////////////////////////
 
@@ -226,6 +234,7 @@ struct dump_payload_thread {
 /////////////////////////
 // Data structures used to track sequences of HTTP queries
 typedef struct http_req_value {
+    struct timeval time;
     char host[MAX_HOST_LEN+1];
     char refhost[MAX_HOST_LEN+1];
     char ua[MAX_UA_LEN+1]; // generalized user agent string
@@ -252,14 +261,14 @@ char *dump_dir;
 char *nic_name;
 lru_cache_t *lruc;
 
-glru_cache_t* glruc;
+glru_cache_t* glruc_q;
 
 static void stop_pcap(int);
 static void print_stats(int);
 static void clean_and_print_lruc_stats(int);
 void print_usage(char* cmd);
 void packet_received(char *args, const struct pcap_pkthdr *header, const u_char *packet);
-struct tcp_flow* init_flow(const struct ip_header  *ip, const struct tcp_header *tcp, const char *key, const char *rev_key, const char *anon_key);
+struct tcp_flow* init_flow(const char *srcip, const char *key, const char *rev_key, const char *anon_key);
 struct tcp_flow* lookup_flow(lru_cache_t *lruc, const char *key);
 void store_flow(lru_cache_t *lruc, const char *key, struct tcp_flow *tflow);
 void remove_flow(lru_cache_t *lruc, struct tcp_flow *tflow);
@@ -286,8 +295,17 @@ short is_missing_flow_data(seq_list_t *l, int flow_payload_len);
 void dump_pe(struct tcp_flow *tflow);
 void *dump_file_thread(void* d);
 
+bool equal_httpreq(http_req_value_t* v1, http_req_value_t* v2);
+
+///////////////////////////
+// Used for tracking HTTP request sequences
+#define FIFOQ_LEN 1000
+#define GLRUC_TTL 3600 // 1h
+#define GLRUC_LEN 100000
+
 void fifoq_destroy_fn(void* q);
 void print_http_req_value(void* v);
+///////////////////////////
 
 
 ///////////////////////////
@@ -472,7 +490,7 @@ int main(int argc, char **argv) {
     lruc = lruc_init(lruc_size, tflow_destroy);
 
     // Initialize GLRU cache used to track sequences of requests        
-    glruc = glruc_init(100000, 3600, true, false, true, true, 0, NULL, fifoq_destroy_fn);
+    glruc_q = glruc_init(GLRUC_LEN, GLRUC_TTL, true, false, true, true, 0, NULL, fifoq_destroy_fn);
 
 
 
@@ -688,9 +706,8 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
 
     //////////////////////////////
     // We now compute the packet IDs (srcIP, scrPort, dstIP, dstPort)
-    #define SRCIP_LEN 15
     #define PACKET_SRC_DST_ID_LEN 21 // String Format: IP:TCP_PORT -> xxx.xxx.xxx.xxx:xxxxx
-    char srcip[SRCIP_LEN+1];
+    char srcip[MAX_IP_LEN+1];
     char pkt_src[PACKET_SRC_DST_ID_LEN+1];
     char pkt_dst[PACKET_SRC_DST_ID_LEN+1];
     char anon_pkt_src[PACKET_SRC_DST_ID_LEN+1]; // this is useufl for srcIPs that need to be anonymized on-the-fly
@@ -699,21 +716,23 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
     char anon_key[MAX_KEY_LEN+1];
     char rev_key[MAX_KEY_LEN+1];
 
-    sprintf(srcip,"%s",inet_ntoa(ip->ip_src));
     sprintf(pkt_src,"%s:%d",inet_ntoa(ip->ip_src),ntohs(tcp->th_sport));
     sprintf(pkt_dst,"%s:%d",inet_ntoa(ip->ip_dst),ntohs(tcp->th_dport));
     get_key(key,pkt_src,pkt_dst);
     get_key(rev_key,pkt_dst,pkt_src);
 
 
-    // Compute anonymized source ID
+    // Compute anonymized source IP and flow key
+    struct in_addr anon_ip_src = ip->ip_src;
+
     anon_key[0] = '\0'; // empty
     if(anonymize_srcip) {
-        struct in_addr anon_ip_src = ip->ip_src;
         anon_ip_src.s_addr = ((anon_ip_src.s_addr ^ xor_key) & 0xFFFFFF00) | 0x0000000A; // --> 10.x.x.x
         sprintf(anon_pkt_src,"%s:%d",inet_ntoa(anon_ip_src),ntohs(tcp->th_sport));
         get_key(anon_key,anon_pkt_src,pkt_dst);
     }
+
+    sprintf(srcip,"%s",inet_ntoa(anon_ip_src));
     //////////////////////////////
 
 
@@ -721,7 +740,7 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
     // Check if this is a new flow
     if(tcp->th_flags == TH_SYN) {
         
-        tflow = init_flow(ip, tcp, key, rev_key, anon_key); // initialize data structures
+        tflow = init_flow(srcip, key, rev_key, anon_key); // initialize data structures
         if(tflow == NULL)
             return;
 
@@ -936,22 +955,23 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
 
             fifo_queue_t* q;
             http_req_value_t httpreq;
-            httpreq.host[0]='\0';;
+            gettimeofday(&httpreq.time, NULL);
+            httpreq.host[0]='\0';
             httpreq.refhost[0]='\0';
             httpreq.ua[0]='\0';
             get_host(httpreq.host, payload, payload_size);
             get_refhost(httpreq.refhost, payload, payload_size);
             get_user_agent(httpreq.ua, payload, payload_size);
-            glruc_entry_t* e = glruc_search(glruc, srcip);
+            glruc_entry_t* e = glruc_search(glruc_q, tflow->srcip);
             if(e == NULL) {
-                q = fifoq_init(1000, true, true, sizeof(http_req_value_t), NULL, NULL);
-                glruc_insert(glruc, srcip, q);
+                q = fifoq_init(FIFOQ_LEN, true, true, sizeof(http_req_value_t), NULL, NULL);
+                glruc_insert(glruc_q, srcip, q);
             }
             else {
                 q = (fifo_queue_t*)e->value;
             }
-            fifoq_insert(q, &httpreq);
-            print_fifoq(q,print_http_req_value);
+            if(!equal_httpreq(&httpreq,fifoq_get_first_value(q)))
+                fifoq_insert(q, &httpreq);
 
             #ifdef FILE_DUMP_DEBUG
             if(debug_level >= VERBOSE) {
@@ -1129,7 +1149,7 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
 
 
 // Called at new TCP SYN
-struct tcp_flow* init_flow(const struct ip_header  *ip, const struct tcp_header *tcp, const char *key, const char *rev_key, const char *anon_key) {
+struct tcp_flow* init_flow(const char* srcip, const char *key, const char *rev_key, const char *anon_key) {
 
     struct tcp_flow *tflow = (struct tcp_flow*)malloc(sizeof(struct tcp_flow));
     if(tflow == NULL)
@@ -1137,6 +1157,8 @@ struct tcp_flow* init_flow(const struct ip_header  *ip, const struct tcp_header 
 
     tflow->flow_state = FLOW_INIT;
     
+    strcpy(tflow->srcip, srcip);
+
     strcpy(tflow->cs_key, key);
     if(strlen(anon_key)>0)
         strcpy(tflow->anon_cs_key, anon_key);
@@ -1244,8 +1266,8 @@ static void stop_pcap(int signo) {
     // properly destroy LRU cache fist 
     lruc_destroy(lruc);
     lruc = NULL;
-    glruc_destroy(glruc);
-    glruc = NULL;
+    glruc_destroy(glruc_q);
+    glruc_q = NULL;
 
     fprintf(stderr, "\nCaught Signal #%d\n", signo);
     print_stats(signo);
@@ -2014,6 +2036,7 @@ void dump_pe(struct tcp_flow *tflow) {
         return;
 
     sprintf(tdata->dump_file_name,"%s-%d",tflow->anon_cs_key,tflow->http_request_count);
+    strcpy(tdata->srcip,tflow->srcip);
     strcpy(tdata->url,tflow->url);
     strcpy(tdata->host,tflow->host);
     strcpy(tdata->referer,tflow->referer);
@@ -2021,6 +2044,7 @@ void dump_pe(struct tcp_flow *tflow) {
     tdata->file_payload_size = tflow->sc_payload_size;
     tdata->corrupt_pe = tflow->corrupt_pe;
     tdata->sc_seq_list = tflow->sc_seq_list;
+    tdata->httpreq_list = glruc_pop_value(glruc_q,tdata->srcip);
 
     #ifdef FILE_DUMP_DEBUG
     if(debug_level >= VERY_VERY_VERBOSE) {
@@ -2193,6 +2217,11 @@ void *dump_file_thread(void* d) {
     free(tdata->file_payload);
     seq_list_destroy(tdata->sc_seq_list, TRUE);
     tdata->sc_seq_list = NULL;
+
+    if(tdata->httpreq_list!=NULL)
+        print_fifoq(tdata->httpreq_list, print_http_req_value);
+    fifoq_destroy(tdata->httpreq_list);
+
     free(tdata);
 
     #ifdef FILE_DUMP_DEBUG    
@@ -2480,10 +2509,22 @@ void reverse(char *s) {
 
 void print_http_req_value(void* v) {
     http_req_value_t* h = (http_req_value_t*)v;
-    printf("%s | %s | %s", h->host, h->refhost, h->ua);
+    printf("%lu.%lu : %s | %s | %s", h->time.tv_sec, h->time.tv_usec, h->host, h->refhost, h->ua);
 }
 
 void fifoq_destroy_fn(void* q) {
     fifoq_destroy((fifo_queue_t*)q);
+}
+
+bool equal_httpreq(http_req_value_t* v1, http_req_value_t* v2) {
+    return false; 
+
+    printf("===========");
+    printf("v1: %s %s %s\n",v1->host,v1->refhost,v1->ua);
+    printf("v2: %s %s %s\n",v2->host,v2->refhost,v2->ua);
+    printf("===========");
+    if(strcmp(v1->host,v2->host)==0 && strcmp(v1->refhost,v2->refhost)==0 && strcmp(v1->ua,v2->ua)==0)
+        return true;
+    return false;
 }
 

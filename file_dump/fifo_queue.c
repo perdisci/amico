@@ -128,10 +128,18 @@ void fifoq_delete_element(fifo_queue_t* q, fifoq_entry_t* e) {
 }
 
 void* fifoq_get_first_value(fifo_queue_t *q) {
+    if(q==NULL)
+        return NULL;
+    if(q->first==NULL)
+        return NULL;
     return q->first->value;
 }
 
 void* fifoq_get_last_value(fifo_queue_t *q) {
+    if(q==NULL)
+        return NULL;
+    if(q->last==NULL)
+        return NULL;
     return q->last->value;
 }
 
@@ -165,6 +173,7 @@ void print_fifoq(fifo_queue_t *q, void (*print_val_fn)(void*)) {
         v = v->prev;
     }
     printf("=================\n");
+    fflush(stdout);
 
 }
 

@@ -64,6 +64,7 @@ int glruc_insert(glru_cache_t *lruc, char *key, void* value);
 glruc_entry_t* glruc_search(glru_cache_t *lruc, const char *key);
 void glruc_delete(glru_cache_t *lruc, char *key);
 void glruc_destroy(glru_cache_t *lruc);
+void* glruc_pop_value(glru_cache_t *lruc, char *key);
 void glruc_prune(glru_cache_t *lruc);
 
 void print_glruc(glru_cache_t *lruc);
