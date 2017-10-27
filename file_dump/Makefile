@@ -1,4 +1,4 @@
-OBJ = file_dump.o search.o lru-cache.o seq_list.o
+OBJ = file_dump.o search.o lru-cache.o seq_list.o ghash_table.o glru_cache.o fifo_queue.o
 CFLAGS = -Wall -O3
 CC = gcc
 INCLUDE =

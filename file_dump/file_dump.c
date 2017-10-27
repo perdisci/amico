@@ -31,8 +31,12 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <pthread.h>
+
 #include "lru-cache.h"
 #include "seq_list.h"
+
+#include "glru_cache.h" // new implementation of O(1) LRU cache
+#include "fifo_queue.h"
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
@@ -135,6 +139,7 @@ struct tcp_header {
 #define MAX_FILE_DUMP_SIZE 2*KB_SIZE*KB_SIZE
 #define MAX_KEY_LEN 60 // larger than really needed
 #define MAX_URL_LEN 512
+#define MAX_UA_LEN 256
 #define MAX_HOST_LEN 256
 #define MAX_REFERER_LEN 512
 #define MAX_DUMPDIR_LEN 256
@@ -218,6 +223,19 @@ struct dump_payload_thread {
 /////////////////////////
 
 
+/////////////////////////
+// Data structures used to track sequences of HTTP queries
+typedef struct http_req_value {
+    char host[MAX_HOST_LEN+1];
+    char refhost[MAX_HOST_LEN+1];
+    char ua[MAX_UA_LEN+1]; // generalized user agent string
+} http_req_value_t;
+
+typedef struct http_req_value_dyn {
+    char* url;
+    char* ua; // generalized user agent string
+} http_req_value_dyn_t;
+/////////////////////////
 
 
 pcap_t *pch;             /* packet capture handler */
@@ -233,6 +251,8 @@ int max_dump_file_size;
 char *dump_dir;
 char *nic_name;
 lru_cache_t *lruc;
+
+glru_cache_t* glruc;
 
 static void stop_pcap(int);
 static void print_stats(int);
@@ -257,12 +277,17 @@ int contains_interesting_file(const struct tcp_flow *tflow);
 char* get_url(char* url, const char *payload, int payload_size);
 char* get_host(char* host, const char *payload, int payload_size);
 char* get_referer(char* referer, const char *payload, int payload_size);
+char* get_refhost(char* refhost, const char *payload, int payload_size);
+char* get_user_agent(char* ua, const char *payload, int payload_size);
 int get_content_length(const char *payload, int payload_size);
 int get_resp_hdr_length(const char *payload, int payload_size);
 int parse_content_length_str(const char *cl_str);
 short is_missing_flow_data(seq_list_t *l, int flow_payload_len);
 void dump_pe(struct tcp_flow *tflow);
 void *dump_file_thread(void* d);
+
+void fifoq_destroy_fn(void* q);
+void print_http_req_value(void* v);
 
 
 ///////////////////////////
@@ -445,6 +470,10 @@ int main(int argc, char **argv) {
 
     // Initialize LRU cache used to track/reassemble TCP flows        
     lruc = lruc_init(lruc_size, tflow_destroy);
+
+    // Initialize GLRU cache used to track sequences of requests        
+    glruc = glruc_init(100000, 3600, true, false, true, true, 0, NULL, fifoq_destroy_fn);
+
 
 
     // Start reading from device or file
@@ -659,7 +688,9 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
 
     //////////////////////////////
     // We now compute the packet IDs (srcIP, scrPort, dstIP, dstPort)
+    #define SRCIP_LEN 15
     #define PACKET_SRC_DST_ID_LEN 21 // String Format: IP:TCP_PORT -> xxx.xxx.xxx.xxx:xxxxx
+    char srcip[SRCIP_LEN+1];
     char pkt_src[PACKET_SRC_DST_ID_LEN+1];
     char pkt_dst[PACKET_SRC_DST_ID_LEN+1];
     char anon_pkt_src[PACKET_SRC_DST_ID_LEN+1]; // this is useufl for srcIPs that need to be anonymized on-the-fly
@@ -668,6 +699,7 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
     char anon_key[MAX_KEY_LEN+1];
     char rev_key[MAX_KEY_LEN+1];
 
+    sprintf(srcip,"%s",inet_ntoa(ip->ip_src));
     sprintf(pkt_src,"%s:%d",inet_ntoa(ip->ip_src),ntohs(tcp->th_sport));
     sprintf(pkt_dst,"%s:%d",inet_ntoa(ip->ip_dst),ntohs(tcp->th_dport));
     get_key(key,pkt_src,pkt_dst);
@@ -901,6 +933,25 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
             get_url(tflow->url, payload, payload_size);
             get_host(tflow->host, payload, payload_size);
             get_referer(tflow->referer, payload, payload_size);
+
+            fifo_queue_t* q;
+            http_req_value_t httpreq;
+            httpreq.host[0]='\0';;
+            httpreq.refhost[0]='\0';
+            httpreq.ua[0]='\0';
+            get_host(httpreq.host, payload, payload_size);
+            get_refhost(httpreq.refhost, payload, payload_size);
+            get_user_agent(httpreq.ua, payload, payload_size);
+            glruc_entry_t* e = glruc_search(glruc, srcip);
+            if(e == NULL) {
+                q = fifoq_init(1000, true, true, sizeof(http_req_value_t), NULL, NULL);
+                glruc_insert(glruc, srcip, q);
+            }
+            else {
+                q = (fifo_queue_t*)e->value;
+            }
+            fifoq_insert(q, &httpreq);
+            print_fifoq(q,print_http_req_value);
 
             #ifdef FILE_DUMP_DEBUG
             if(debug_level >= VERBOSE) {
@@ -1193,6 +1244,8 @@ static void stop_pcap(int signo) {
     // properly destroy LRU cache fist 
     lruc_destroy(lruc);
     lruc = NULL;
+    glruc_destroy(glruc);
+    glruc = NULL;
 
     fprintf(stderr, "\nCaught Signal #%d\n", signo);
     print_stats(signo);
@@ -1340,6 +1393,92 @@ char *get_referer(char* referer, const char *payload, int payload_size) {
     return referer;
 }
 
+char *get_refhost(char* refhost, const char *payload, int payload_size) {
+
+    char haystack[payload_size+1];
+    const char needle[] = "\r\nReferer:";
+    char *p = NULL;
+    int i;
+
+    char referer[MAX_HOST_LEN+1];
+
+    strncpy(haystack, payload, payload_size);
+    haystack[payload_size]='\0'; // just to be safe...
+
+    if(strlen(haystack) < strlen(needle))
+        return "\0";
+
+    p = boyermoore_search(haystack,needle);
+    
+    if(p == NULL) 
+        referer[0] = '\0';
+    else {
+        p += 2; // skip \r\n
+        for(i=0; i<MAX_HOST_LEN && (p+i) < &(haystack[payload_size]); i++) {
+            if(*(p+i) == '\r' || *(p+i) == '\n')
+                break;
+            referer[i]=*(p+i);
+        }
+        referer[i]='\0';
+    }
+
+    char* pos = strstr(referer,"://");
+    if(pos == NULL)
+        return NULL;
+
+    pos += strlen("://"); // skip '://'
+    while(*pos != '/' && *pos != '\0') {
+        *refhost = *pos;
+        pos++;
+        refhost++;
+    }
+    *refhost = '\0';
+
+    return refhost;
+}
+
+char *get_user_agent(char* ua, const char *payload, int payload_size) {
+
+    char haystack[payload_size+1];
+    const char needle[] = "\r\nUser-Agent:";
+    char *p = NULL;
+    int i;
+
+    strncpy(haystack, payload, payload_size);
+    haystack[payload_size]='\0'; // just to be safe...
+
+    if(strlen(haystack) < strlen(needle))
+        return "\0";
+
+    p = boyermoore_search(haystack,needle);
+    
+    if(p == NULL) 
+        ua[0] = '\0';
+    else {
+        p += 2; // skip \r\n
+        for(i=0; i<MAX_UA_LEN && (p+i) < &(haystack[payload_size]); i++) {
+            if(*(p+i) == '\r' || *(p+i) == '\n')
+                break;
+            ua[i]=*(p+i);
+        }
+        ua[i]='\0';
+    }
+
+    if(strstr(ua,"Chrome"))
+        strcpy(ua,"Chrome"); // replace UA string with generalized UA
+    else if(strstr(ua,"Firefox"))
+        strcpy(ua,"Firefox");
+    else if(strstr(ua,"MSIE"))
+        strcpy(ua,"MSIE");
+    else if(strstr(ua,"Safari"))
+        strcpy(ua,"Safari");
+    else if(strstr(ua,"Opera"))
+        strcpy(ua,"Opera");
+    else
+        strcpy(ua,"Other UA");
+
+    return ua;
+}
 
 int is_complete_http_resp_header(const struct tcp_flow *tflow) {
     if(tflow->sc_payload == NULL)
@@ -2336,5 +2475,15 @@ void reverse(char *s) {
          s[i] = s[j];
          s[j] = c;
      }
+}
+
+
+void print_http_req_value(void* v) {
+    http_req_value_t* h = (http_req_value_t*)v;
+    printf("%s | %s | %s", h->host, h->refhost, h->ua);
+}
+
+void fifoq_destroy_fn(void* q) {
+    fifoq_destroy((fifo_queue_t*)q);
 }
 
