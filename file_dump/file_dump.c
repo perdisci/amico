@@ -2517,14 +2517,20 @@ void fifoq_destroy_fn(void* q) {
 }
 
 bool equal_httpreq(http_req_value_t* v1, http_req_value_t* v2) {
-    return false; 
 
+    if(v1==NULL || v2==NULL)
+        return false;
+
+    /*
     printf("===========");
     printf("v1: %s %s %s\n",v1->host,v1->refhost,v1->ua);
     printf("v2: %s %s %s\n",v2->host,v2->refhost,v2->ua);
     printf("===========");
+    */
+
     if(strcmp(v1->host,v2->host)==0 && strcmp(v1->refhost,v2->refhost)==0 && strcmp(v1->ua,v2->ua)==0)
         return true;
+
     return false;
 }
 
