@@ -30,6 +30,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/inotify.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <pthread.h>
@@ -329,15 +330,28 @@ u_int stats_num_new_file_flows = 0;
 
 ///////////////////////////
 // File types that may be dumped
-int find_pe_files  = TRUE; // on by default!
-int find_elf_files = FALSE;
-int find_dmg_files = FALSE;
-int find_zip_files = FALSE;
-int find_jar_files = FALSE;
-int find_rar_files = FALSE;
-int find_pdf_files = FALSE;
-int find_swf_files = FALSE;
-int find_msdoc_files = FALSE;
+bool find_pe_files  = true; // on by default!
+bool find_elf_files = false;
+bool find_dmg_files = false;
+bool find_zip_files = false;
+bool find_jar_files = false;
+bool find_rar_files = false;
+bool find_pdf_files = false;
+bool find_swf_files = false;
+bool find_msdoc_files = false;
+///////////////////////////
+
+
+///////////////////////////
+// HTTP request list tracking and logging
+bool track_httpreq_sequences = true;
+bool dump_httpreq_list_thread_must_exit = false;
+char* dump_notify_dir = NULL;
+
+void create_dev_shm_tmp_file(char* fname);
+void remove_dev_shm_tmp_file(char* fname);
+void* dump_httpreq_list_thread(void* notify_dir);
+void interrupt_dump_httpreq_list_thread();
 ///////////////////////////
 
 
@@ -493,6 +507,14 @@ int main(int argc, char **argv) {
     glruc_q = glruc_init(GLRUC_LEN, GLRUC_TTL, true, false, true, true, 0, NULL, fifoq_destroy_fn);
 
 
+    track_httpreq_sequences = true;
+    dump_notify_dir = "/dev/shm";
+    if(track_httpreq_sequences) {
+        pthread_t thread_id;
+        pthread_create(&thread_id,NULL,dump_httpreq_list_thread,(void*)dump_notify_dir);
+        pthread_detach(thread_id); // this allows for the thread data structures to be reclaimed as soon as thread ends
+    }
+
 
     // Start reading from device or file
     *err_str = '\0';
@@ -556,10 +578,13 @@ int main(int argc, char **argv) {
 
     /* start listening */
     printf("Reading packets...\n\n");
+    fflush(stdout);
 
     pcap_loop(pch, MAX_RCV_PACKETS, callback, NULL);
 
     printf("Done reading packets!\n\n");
+
+    interrupt_dump_httpreq_list_thread();
 
     pthread_exit(NULL); // exit but allows other threads to termiate gracefully
 }
@@ -970,8 +995,9 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
             else {
                 q = (fifo_queue_t*)e->value;
             }
-            if(!equal_httpreq(&httpreq,fifoq_get_first_value(q)))
+            if(!equal_httpreq(&httpreq,fifoq_get_last_value(q))) {
                 fifoq_insert(q, &httpreq);
+            }
 
             #ifdef FILE_DUMP_DEBUG
             if(debug_level >= VERBOSE) {
@@ -1272,6 +1298,8 @@ static void stop_pcap(int signo) {
     fprintf(stderr, "\nCaught Signal #%d\n", signo);
     print_stats(signo);
     clean_and_print_lruc_stats(signo);
+
+    interrupt_dump_httpreq_list_thread();
     pthread_exit(NULL);
 
 }
@@ -2062,12 +2090,34 @@ void dump_pe(struct tcp_flow *tflow) {
 }
 
 void *dump_file_thread(void* d) {
+    struct dump_payload_thread* tdata = (struct dump_payload_thread*)d;
 
+    #define TS_STR_LEN 20
+    char ts_str[TS_STR_LEN+1];
+    itoa(time(NULL),ts_str);
+
+    ////////////////////////////////////
+    // Notify all listening processes that http request list 
+    // for srcip must be dumpted
+    #define NOTIFY_FNAME_LEN 1024
+    char notify_fname[NOTIFY_FNAME_LEN];
+
+    notify_fname[0]='\0';
+    strcat(notify_fname,"httpreqlist_");
+    strcat(notify_fname,ts_str);
+    strcat(notify_fname,"_");
+    strncat(notify_fname,tdata->dump_file_name,MAX_KEY_LEN+1);
+
+    create_dev_shm_tmp_file(notify_fname);
+    ////////////////////////////////////
+
+
+    ///////////////////////////////////
+    // Executable file dump
     #define FNAME_LEN MAX_DUMPDIR_LEN+MAX_NIC_NAME_LEN+MAX_KEY_LEN+3
     char fname[FNAME_LEN];
     char tmp_fname[FNAME_LEN+TMP_SUFFIX_LEN+1];
     FILE* dump_file;
-    struct dump_payload_thread *tdata = (struct dump_payload_thread*) d;
 
     if(tdata == NULL || tdata->file_payload == NULL)
         pthread_exit(NULL);
@@ -2093,7 +2143,7 @@ void *dump_file_thread(void* d) {
     strncat(tmp_fname,".tmp",TMP_SUFFIX_LEN);
     if((dump_file = fopen(tmp_fname,"wb")) == NULL) {
         fprintf(stderr,"Cannot write to file %s\n",tmp_fname);
-	perror("--> ");
+	    perror("--> ");
         fflush(stderr);
     }
     printf("Writing to file %s\n",tmp_fname);
@@ -2106,9 +2156,6 @@ void *dump_file_thread(void* d) {
     }
     #endif
 
-    #define TS_STR_LEN 20
-    char ts_str[TS_STR_LEN+1];
-    itoa(time(NULL),ts_str);
 
     fwrite("% ", sizeof(char), 2, dump_file);
     fwrite(ts_str, sizeof(char), strlen(ts_str), dump_file);
@@ -2218,9 +2265,6 @@ void *dump_file_thread(void* d) {
     seq_list_destroy(tdata->sc_seq_list, TRUE);
     tdata->sc_seq_list = NULL;
 
-    if(tdata->httpreq_list!=NULL)
-        print_fifoq(tdata->httpreq_list, print_http_req_value);
-    fifoq_destroy(tdata->httpreq_list);
 
     free(tdata);
 
@@ -2231,6 +2275,13 @@ void *dump_file_thread(void* d) {
     }
     #endif
 
+    ////////////////////////////////////
+    // Remove file used for notification
+    sleep(3); // waits a moment to make sure inotify realizes a file was previously written
+
+    remove_dev_shm_tmp_file(notify_fname);
+    ////////////////////////////////////
+    
     pthread_exit(NULL);
 }
 
@@ -2518,19 +2569,159 @@ void fifoq_destroy_fn(void* q) {
 
 bool equal_httpreq(http_req_value_t* v1, http_req_value_t* v2) {
 
-    if(v1==NULL || v2==NULL)
+    if(v1==NULL || v2==NULL) {
         return false;
+    }
 
-    /*
-    printf("===========");
-    printf("v1: %s %s %s\n",v1->host,v1->refhost,v1->ua);
-    printf("v2: %s %s %s\n",v2->host,v2->refhost,v2->ua);
-    printf("===========");
-    */
-
-    if(strcmp(v1->host,v2->host)==0 && strcmp(v1->refhost,v2->refhost)==0 && strcmp(v1->ua,v2->ua)==0)
-        return true;
+    if(strcmp(v1->host,v2->host)==0) { 
+        // (v1->refhost == v2->refhost) needed in case the two are NULL
+        if((v1->refhost == v2->refhost) || strcmp(v1->refhost,v2->refhost)==0) {
+            if((v1->ua == v2->ua) || (strcmp(v1->ua,v2->ua)==0)) {
+                return true;
+            }
+        }
+    }
 
     return false;
 }
 
+
+void* dump_httpreq_list_thread(void* notify_dir) {
+    char* notify_dir_str = (char*)notify_dir;
+
+    #define EVENT_SIZE sizeof(struct inotify_event)
+    #define EVENT_BUF_LEN 1024*(EVENT_SIZE + 16) 
+
+    int event_len, i = 0;
+    int fd, wd;
+    char buffer[EVENT_BUF_LEN];
+
+    if((fd = inotify_init()) < 0) 
+        perror("Error in inotify_init");
+    if((wd = inotify_add_watch(fd, notify_dir_str, IN_CREATE)) < 0)
+        perror("Error in inotify_add_watch");
+
+    bool stop = false;
+    while(!stop) {
+
+        if((event_len = read(fd, buffer, EVENT_BUF_LEN)) < 0) {
+            perror("Error reading event bugger");
+            break;
+        }
+
+        while(i<event_len) {
+            struct inotify_event *e = (struct inotify_event*)&buffer[i];
+            if(e->len > 0) {
+                if((e->mask & IN_CREATE) && !(e->mask & IN_ISDIR)) {
+                    printf("==NOTIFY== New file %s created in %s\n", e->name, notify_dir_str);
+                    fflush(stdout);
+
+                    char* srcip = get_srcip_from_httpreq_fname(e->name);
+
+                    // mutex
+                    q = glruc_pop_value(glruc_q,srcip);
+
+                    if(tdata->httpreq_list!=NULL)
+                        print_fifoq(tdata->httpreq_list, print_http_req_value);
+                    fifoq_destroy(tdata->httpreq_list);
+                }
+            }
+            i += EVENT_SIZE + e->len;
+        }
+
+        // TODO: add mutex lock here
+        stop = dump_httpreq_list_thread_must_exit;
+        // remove mutex lock here
+    }
+
+    inotify_rm_watch(fd,wd);
+    close(fd);
+
+    pthread_exit(NULL);
+}
+
+
+
+///////////////////////////////////////////
+#define DEV_SHM_PATH "/dev/shm/"
+void create_dev_shm_tmp_file(char* fname) {
+    char pidstr[12];
+    char fpath[strlen(DEV_SHM_PATH)+strlen(fname)+1];
+    FILE* dump_httpreq_list_notify_file;
+
+    fpath[0]='\0';
+    strcat(fpath,DEV_SHM_PATH);
+    strcat(fpath,fname);
+
+    itoa(getpid(),pidstr);
+    strcat(fpath,"__");
+    strcat(fpath,pidstr);
+
+    if((dump_httpreq_list_notify_file = fopen(fpath,"wb")) == NULL) {
+        fprintf(stderr,"Cannot write to notify file %s\n",fpath);
+        perror("--> ");
+        fflush(stderr);
+    }
+    fclose(dump_httpreq_list_notify_file);
+    printf("Wrote notify file: %s\n",fpath);
+    fflush(stdout);
+}
+
+void remove_dev_shm_tmp_file(char* fname) {
+    char pidstr[12];
+    char fpath[strlen(DEV_SHM_PATH)+strlen(fname)+1];
+
+    fpath[0]='\0';
+    strcat(fpath,DEV_SHM_PATH);
+    strcat(fpath,fname); 
+ 
+    itoa(getpid(),pidstr);
+    strcat(fpath,"__");
+    strcat(fpath,pidstr);
+
+    if(remove(fpath)!=0) {
+        fprintf(stderr, "Cannot remove notify file %s\n", fpath);
+    }
+    printf("Removed notify file: %s\n",fpath);
+    fflush(stdout);
+}
+
+void interrupt_dump_httpreq_list_thread() {
+    dump_httpreq_list_thread_must_exit = true;
+    // will make inotify read infinite loop treminate
+    create_dev_shm_tmp_file("dump_httpreq_list_thread_must_exit");
+    sleep(1);
+    remove_dev_shm_tmp_file("dump_httpreq_list_thread_must_exit");
+}
+
+char* get_srcip_from_httpreq_fname(char* fname) {
+    //fname format:
+    //httpreqlist_timestamp_srcip:srcport-dstip:dstport
+
+    char* httptok = strtok(fname, "-");
+    if(httptok == NULL || strcmp(httptok,"httpreqlist")!=0)
+        return NULL;
+
+    char* ts = strtok(NULL, "-");
+    char* tcp_tuple = strtok(NULL, "-");
+
+    if(tcp_tuple == NULL)
+        return NULL;
+
+    char* srcip = strtok(tcp_tuple, ":");
+    return srcip;   
+}
+
+char* get_timestr_from_httpreq_fname(char* fname) {
+    //fname format:
+    //httpreqlist_timestamp_srcip:srcport-dstip:dstport
+
+    char* httptok = strtok(fname, "-");
+    if(httptok == NULL || strcmp(httptok,"httpreqlist")!=0)
+        return NULL;
+
+    char* ts = strtok(NULL, "-");
+    return ts;   
+}
+
+///////////////////////////////////////////
