@@ -156,23 +156,23 @@ void fifoq_reset_cursor(fifo_queue_t *q) {
     q->cursor = q->first;
 }
 
-void print_fifoq(fifo_queue_t *q, void (*print_val_fn)(void*)) {   
+void print_fifoq(fifo_queue_t *q, void (*print_val_fn)(void*,FILE*), FILE* f) {   
     
     if(q == NULL)
         return;
 
     fifoq_entry_t* v = q->first;
 
-    printf("=Q===============\n");
-    printf("Elements: %lu\n", q->num_elements);
+    fprintf(f,"=Q===============\n");
+    fprintf(f,"Elements: %lu\n", q->num_elements);
     uint16_t i = 0;
     while(v!=NULL) {
-        printf("%u:(%p) :: ", i++, v);
-        print_val_fn(v->value);
-        printf("\n");
+        fprintf(f, "%u :: ", ++i);
+        print_val_fn(v->value, f);
+        fprintf(f, "\n");
         v = v->prev;
     }
-    printf("=================\n");
+    fprintf(f,"=================\n");
     fflush(stdout);
 
 }

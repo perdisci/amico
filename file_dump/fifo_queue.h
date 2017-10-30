@@ -63,7 +63,7 @@ void* fifoq_get_last_value(fifo_queue_t *q);
 void* fifoq_get_next_value(fifo_queue_t *q);
 void fifoq_reset_cursor(fifo_queue_t *q);
 
-void print_fifoq(fifo_queue_t* q, void (*print_val_fn)(void*));
+void print_fifoq(fifo_queue_t* q, void (*print_val_fn)(void*,FILE*), FILE* f);
 
 #endif // __FIFO_QUEUE__
 
