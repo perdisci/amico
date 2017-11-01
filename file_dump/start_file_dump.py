@@ -26,5 +26,5 @@ if len(manual_download_ip) > 0:
 bpf_filter += "\""
 
 subprocess.call("""
-        ./file_dump -i %s -d dumps/ -A -J -G -f %s """ %
+        ./file_dump -i %s -d dumps/ -A -J -G -H httpreqs/ -T ads_domains.config -f %s """ %
             (nic, bpf_filter), shell=True)

@@ -38,7 +38,8 @@
 #include "lru-cache.h"
 #include "seq_list.h"
 
-#include "glru_cache.h" // new implementation of O(1) LRU cache
+#include "ghash_table.h" // new generic hash table
+#include "glru_cache.h"  // new implementation of O(1) LRU cache
 #include "fifo_queue.h"
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
@@ -234,6 +235,7 @@ struct dump_payload_thread {
 // Data structures used to track sequences of HTTP queries
 typedef struct http_req_value {
     struct timeval time;
+    char servip[MAX_IP_LEN+1];
     char host[MAX_HOST_LEN+1];
     char refhost[MAX_HOST_LEN+1];
     char ua[MAX_UA_LEN+1]; // generalized user agent string
@@ -246,7 +248,7 @@ typedef struct http_req_value_dyn {
 /////////////////////////
 
 
-pcap_t *pch;             /* packet capture handler */
+pcap_t *pch = NULL;      /* packet capture handler */
 struct bpf_program pcf;  /* compiled BPF filter */
 
 struct pcap_stat stats;
@@ -256,12 +258,15 @@ int anonymize_srcip = TRUE; // used to anonymize client IP for all downloads and
 unsigned long xor_key = 0;
 
 int max_dump_file_size;
-char *dump_dir;
-char *nic_name;
-lru_cache_t *lruc;
+char *dump_dir = NULL;
+char *nic_name = NULL;
+lru_cache_t *lruc = NULL;
 
-glru_cache_t* glruc_q;
+////////////////////////////////
+ghash_table_t* triggers_ht = NULL;
+glru_cache_t* glruc_q = NULL;
 pthread_mutex_t glruc_q_mutex;
+////////////////////////////////
 
 static void stop_pcap(int);
 static void print_stats(int);
@@ -285,8 +290,9 @@ int is_complete_http_resp_header(const struct tcp_flow *tflow);
 int contains_interesting_file(const struct tcp_flow *tflow);
 char* get_url(char* url, const char *payload, int payload_size);
 char* get_host(char* host, const char *payload, int payload_size);
+char* get_host_domain(char* host, const char *payload, int payload_size);
 char* get_referer(char* referer, const char *payload, int payload_size);
-char* get_refhost(char* refhost, const char *payload, int payload_size);
+char* get_ref_host(char* refhost, const char *payload, int payload_size);
 char* get_user_agent(char* ua, const char *payload, int payload_size);
 int get_content_length(const char *payload, int payload_size);
 int get_resp_hdr_length(const char *payload, int payload_size);
@@ -304,10 +310,14 @@ bool str_starts_with(char* s1, char* s2);
 #define FIFOQ_LEN 1000
 #define GLRUC_TTL 3600 // 1h
 #define GLRUC_LEN 100000
+#define NOTIFY_FNAME_LEN 1024
+#define HTTPREQLIST_PREFIX "httpreqlist-"
+#define TS_STR_LEN 20
 
 void fifoq_destroy_fn(void* q);
 void print_http_req_value(void* v, FILE* f);
 void print_http_req_list(fifo_queue_t* q, FILE* f, time_t time_limit);
+ghash_table_t* init_httpreq_triggers_ht(char* triggers_fname);
 ///////////////////////////
 
 
@@ -347,6 +357,7 @@ bool find_msdoc_files = false;
 ///////////////////////////
 // HTTP request list tracking and logging
 char* httpreq_track_dir = NULL;
+char* httpreq_triggers_file = NULL;
 bool track_httpreq_sequences = false;
 bool dump_httpreq_list_thread_must_exit = false;
 char* dump_notify_dir = NULL;
@@ -354,6 +365,7 @@ char* dump_notify_dir = NULL;
 void create_dev_shm_tmp_file(char* fname);
 void remove_dev_shm_tmp_file(char* fname);
 void* dump_httpreq_list_thread(void* notify_dir);
+void* notify_httpreq_match_thread(void* fname);
 void interrupt_dump_httpreq_list_thread();
 char* get_srcip_from_httpreq_fname(char* fname);
 time_t get_time_from_httpreq_fname(char* fname);
@@ -387,7 +399,7 @@ int main(int argc, char **argv) {
     pcap_file = NULL;
 
     int op;
-    while ((op = getopt(argc, argv, "hi:r:d:f:D:L:K:H:AWMGZPERSJ")) != -1) {
+    while ((op = getopt(argc, argv, "hi:r:d:f:D:L:K:H:T:AWMGZPERSJ")) != -1) {
         switch (op) {
 
         case 'h': // shows command usage/help
@@ -472,6 +484,11 @@ int main(int argc, char **argv) {
             dump_notify_dir = "/dev/shm"; // FIXME(Roberto): make it configurable
             break;
 
+        case 'T': // HTTP request list tracking triggers (list of domains)
+            httpreq_triggers_file = optarg; // file should contain a list of host names
+            track_httpreq_sequences = true;
+            break;
+
         }
     }
 
@@ -524,6 +541,11 @@ int main(int argc, char **argv) {
             print_usage(argv[0]);
             exit(1);
         }
+
+        if(httpreq_triggers_file != NULL) {
+            triggers_ht = init_httpreq_triggers_ht(httpreq_triggers_file);
+        }
+
         pthread_t thread_id;
         pthread_create(&thread_id,NULL,dump_httpreq_list_thread,(void*)dump_notify_dir);
         pthread_detach(thread_id); // this allows for the thread data structures to be reclaimed as soon as thread ends
@@ -747,6 +769,7 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
     // We now compute the packet IDs (srcIP, scrPort, dstIP, dstPort)
     #define PACKET_SRC_DST_ID_LEN 21 // String Format: IP:TCP_PORT -> xxx.xxx.xxx.xxx:xxxxx
     char srcip[MAX_IP_LEN+1];
+    char dstip[MAX_IP_LEN+1];
     char pkt_src[PACKET_SRC_DST_ID_LEN+1];
     char pkt_dst[PACKET_SRC_DST_ID_LEN+1];
     char anon_pkt_src[PACKET_SRC_DST_ID_LEN+1]; // this is useufl for srcIPs that need to be anonymized on-the-fly
@@ -772,6 +795,7 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
     }
 
     sprintf(srcip,"%s",inet_ntoa(anon_ip_src));
+    sprintf(dstip,"%s",inet_ntoa(ip->ip_dst));
     //////////////////////////////
 
 
@@ -995,11 +1019,15 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
             fifo_queue_t* q;
             http_req_value_t httpreq;
             gettimeofday(&httpreq.time, NULL);
+            httpreq.servip[0]='\0';
             httpreq.host[0]='\0';
             httpreq.refhost[0]='\0';
             httpreq.ua[0]='\0';
-            get_host(httpreq.host, payload, payload_size);
-            get_refhost(httpreq.refhost, payload, payload_size);
+
+            strncpy(httpreq.servip,dstip,MAX_IP_LEN);
+            httpreq.servip[MAX_IP_LEN]='\0';
+            get_host_domain(httpreq.host, payload, payload_size);
+            get_ref_host(httpreq.refhost, payload, payload_size);
             get_user_agent(httpreq.ua, payload, payload_size);
             
             pthread_mutex_lock(&glruc_q_mutex);
@@ -1017,6 +1045,30 @@ void packet_received(char *args, const struct pcap_pkthdr *header, const u_char 
             }
             if(!equal_httpreq(&httpreq,fifoq_get_last_value(q))) {
                 fifoq_insert(q, &httpreq);
+            }
+
+            if(ght_search(triggers_ht,httpreq.host)!=NULL) {
+                // store httpreq queue
+
+                ////////////////////////////////////
+                // Notify all listening processes that http request list 
+                // for srcip must be dumpted
+                char* notify_fname = (char*)malloc(sizeof(char)*(NOTIFY_FNAME_LEN+1));
+                char ts_str[TS_STR_LEN+1];
+                itoa(httpreq.time.tv_sec,ts_str);
+
+                notify_fname[0]='\0';
+                strcat(notify_fname,HTTPREQLIST_PREFIX);
+                strcat(notify_fname,"domain");
+                strcat(notify_fname,"_");
+                strcat(notify_fname,ts_str);
+                strcat(notify_fname,"_");
+                strncat(notify_fname,tflow->cs_key,MAX_KEY_LEN+1);
+
+                pthread_t th_id;
+                pthread_create(&th_id,NULL,notify_httpreq_match_thread,(void*)notify_fname);
+                pthread_detach(th_id); 
+                ////////////////////////////////////
             }
 
             #ifdef FILE_DUMP_DEBUG
@@ -1318,11 +1370,14 @@ static void stop_pcap(int signo) {
     glruc_q = NULL;
     pthread_mutex_unlock(&glruc_q_mutex);
 
+    ght_destroy(triggers_ht);
+
     fprintf(stderr, "\nCaught Signal #%d\n", signo);
     print_stats(signo);
     clean_and_print_lruc_stats(signo);
 
     interrupt_dump_httpreq_list_thread();
+
     pthread_exit(NULL);
 
 }
@@ -1435,6 +1490,36 @@ char *get_host(char* host, const char *payload, int payload_size) {
     return host;
 }
 
+char *get_host_domain(char* host, const char *payload, int payload_size) {
+
+    char haystack[payload_size+1];
+    const char needle[] = "\r\nHost: ";
+    char *p = NULL;
+    int i;
+
+    strncpy(haystack, payload, payload_size);
+    haystack[payload_size]='\0'; // just to be safe...
+
+    if(strlen(haystack) < strlen(needle))
+        return "\0";
+
+    p = boyermoore_search(haystack,needle);
+    
+    if(p == NULL) 
+        host[0] = '\0';
+    else {
+        p += strlen(needle); // skip \r\nHost:
+        for(i=0; i<MAX_HOST_LEN && (p+i) < &(haystack[payload_size]); i++) {
+            if(*(p+i) == '\r' || *(p+i) == '\n')
+                break;
+            host[i]=*(p+i);
+        }
+        host[i]='\0';
+    }
+
+    return host;
+}
+
 
 char *get_referer(char* referer, const char *payload, int payload_size) {
 
@@ -1466,7 +1551,7 @@ char *get_referer(char* referer, const char *payload, int payload_size) {
     return referer;
 }
 
-char *get_refhost(char* refhost, const char *payload, int payload_size) {
+char *get_ref_host(char* refhost, const char *payload, int payload_size) {
 
     char haystack[payload_size+1];
     const char needle[] = "\r\nReferer:";
@@ -2113,18 +2198,18 @@ void dump_pe(struct tcp_flow *tflow) {
 void *dump_file_thread(void* d) {
     struct dump_payload_thread* tdata = (struct dump_payload_thread*)d;
 
-    #define TS_STR_LEN 20
     char ts_str[TS_STR_LEN+1];
     itoa(time(NULL),ts_str);
 
     ////////////////////////////////////
     // Notify all listening processes that http request list 
     // for srcip must be dumpted
-    #define NOTIFY_FNAME_LEN 1024
-    char notify_fname[NOTIFY_FNAME_LEN];
+    char notify_fname[NOTIFY_FNAME_LEN+1];
 
     notify_fname[0]='\0';
-    strcat(notify_fname,"httpreqlist_");
+    strcat(notify_fname,HTTPREQLIST_PREFIX);
+    strcat(notify_fname,"dump");
+    strcat(notify_fname,"_");
     strcat(notify_fname,ts_str);
     strcat(notify_fname,"_");
     strncat(notify_fname,tdata->dump_file_name,MAX_KEY_LEN+1);
@@ -2581,7 +2666,7 @@ void reverse(char *s) {
 
 void print_http_req_value(void* v, FILE* f) {
     http_req_value_t* h = (http_req_value_t*)v;
-    fprintf(f,"%lu.%lu : %s | %s | %s\n", h->time.tv_sec, h->time.tv_usec, h->host, h->refhost, h->ua);
+    fprintf(f,"%lu.%lu | %s | %s | %s | %s\n", h->time.tv_sec, h->time.tv_usec, h->servip, h->host, h->refhost, h->ua);
 }
 
 void print_http_req_list(fifo_queue_t* q, FILE* f, time_t time_limit) {
@@ -2604,11 +2689,13 @@ bool equal_httpreq(http_req_value_t* v1, http_req_value_t* v2) {
         return false;
     }
 
-    if(strcmp(v1->host,v2->host)==0) { 
-        // (v1->refhost == v2->refhost) needed in case the two are NULL
-        if((v1->refhost == v2->refhost) || strcmp(v1->refhost,v2->refhost)==0) {
-            if((v1->ua == v2->ua) || (strcmp(v1->ua,v2->ua)==0)) {
-                return true;
+    if(strcmp(v1->servip,v2->servip)==0) {
+        if((v1->host == v2->host) || strcmp(v1->host,v2->host)==0) { 
+            // (v1->refhost == v2->refhost) needed in case the two are NULL
+            if((v1->refhost == v2->refhost) || strcmp(v1->refhost,v2->refhost)==0) {
+                if((v1->ua == v2->ua) || (strcmp(v1->ua,v2->ua)==0)) {
+                    return true;
+                }
             }
         }
     }
@@ -2648,7 +2735,7 @@ void* dump_httpreq_list_thread(void* notify_dir) {
                     printf("==NOTIFY== New file %s created in %s\n", e->name, notify_dir_str);
                     fflush(stdout);
 
-                    if(str_starts_with(e->name,"httpreqlist_")) {
+                    if(str_starts_with(e->name,HTTPREQLIST_PREFIX)) {
                         printf("==NOTIFY== strstr: %s \n", e->name);
                         fflush(stdout);
 
@@ -2689,6 +2776,7 @@ void* dump_httpreq_list_thread(void* notify_dir) {
 
                             fprintf(hf,"TS: %ld\n", ts);
                             fprintf(hf,"SRC_IP: %s\n", srcip);
+                            fprintf(hf,"FORMAT: timestamp | server_ip | host | referrer | user_agent \n");
                             fflush(hf);
 
                             // TODO(Roberto): make time delta configurable
@@ -2773,14 +2861,14 @@ void interrupt_dump_httpreq_list_thread() {
 
 char* get_srcip_from_httpreq_fname(char* fname) {
     //fname format:
-    //httpreqlist_timestamp_srcip:srcport-dstip:dstport
+    //httpreqlist-trigger_timestamp_srcip:srcport-dstip:dstport
 
 // Since we first separately extract time
 // by calling get_time_from_httpreq_fname on the same string
 // we can directly get to the tcp_tuple string
 /*
     char* httptok = strtok(fname, "_");
-    if(httptok == NULL || strcmp(httptok,"httpreqlist")!=0)
+    if(httptok == NULL || strcmp(httptok,HTTPREQLIST_PREFIX, strlen(HTTPREQLIST_PREFIX))!=0)
         return NULL;
 
     strtok(NULL, "_"); // skip timestamp
@@ -2796,15 +2884,54 @@ char* get_srcip_from_httpreq_fname(char* fname) {
 
 time_t get_time_from_httpreq_fname(char* fname) {
     //fname format:
-    //httpreqlist_timestamp_srcip:srcport-dstip:dstport
+    //httpreqlist-trigger_timestamp_srcip:srcport-dstip:dstport
 
     char* httptok = strtok(fname, "_");
-    if(httptok == NULL || strcmp(httptok,"httpreqlist")!=0)
+    if(httptok == NULL || strncmp(httptok,HTTPREQLIST_PREFIX,strlen(HTTPREQLIST_PREFIX))!=0)
         return 0;
 
     char* ts = strtok(NULL, "_");
 
     return (time_t)atol(ts);
+}
+
+ghash_table_t* init_httpreq_triggers_ht(char* triggers_fname) {
+    // read triggers (domain names) from triggers_fname file
+
+    #define TRIGGERS_HT_LEN 1000
+    ghash_table_t* ht = ght_init(TRIGGERS_HT_LEN,true,false,true,false,0,NULL,NULL);
+
+    // open and read triggers_fname line by line
+    FILE* f = fopen(triggers_fname, "rt");
+    char line[MAX_HOST_LEN+1];
+
+    printf("Reading trigger host names from: %s\n", triggers_fname);
+    while(fgets(line,MAX_HOST_LEN,f) != NULL) {
+        line[MAX_HOST_LEN] = '\0';
+
+        // strip \n
+        size_t l = strnlen(line,MAX_HOST_LEN);
+        if(line[l-1] == '\n')
+            line[l-1] = '\0';
+
+        printf("Inserting trigger host into HT: %s\n", line);
+        ght_insert(ht,line,NULL);
+    }
+
+    if (ferror(f)) {
+        perror("Error while reading triggers_fname file");
+        return NULL;
+    }
+
+    return ht;
+}
+
+void *notify_httpreq_match_thread(void* fname) {
+    create_dev_shm_tmp_file(fname);
+    sleep(3);
+    remove_dev_shm_tmp_file(fname);
+    free(fname);
+    pthread_exit(NULL);
 }
 
 ///////////////////////////////////////////
