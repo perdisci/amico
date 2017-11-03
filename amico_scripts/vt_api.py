@@ -15,12 +15,20 @@ TIMEOUT = 10
 
 def get_vt_key():
     #random.seed()
+    if vt_keys is None or len(vt_keys) == 0:
+        return None
+
     k = random.randint(0, len(vt_keys) - 1)
     print "Using VT API key number", k
     return vt_keys[k]  # vt_keys must be a list of valid virust_total API keys
 
 
 def send_file(md5):
+
+    vt_key = get_vt_key()
+    if vt_key is None:
+        return None
+
     host = "www.virustotal.com"
     selector = "https://www.virustotal.com/vtapi/v2/file/scan"
     fields = [("apikey", get_vt_key())]
@@ -55,6 +63,9 @@ def send_file(md5):
 
 # Either a singe hash or a list of hashes (upto 25) can be passed
 def rescan_request(arg):
+    if get_vt_key() is None:
+        return None
+
     if isinstance(arg, list):
         res = ""
         for file_hash in arg:
@@ -78,6 +89,9 @@ def rescan_request(arg):
 
 # md5 or sha1 can also be used instead of scan_id
 def get_vt_report(scan_id):
+    if get_vt_key() is None:
+        return None
+
     url = "https://www.virustotal.com/vtapi/v2/file/report"
     parameters = {"resource": scan_id,
                   "apikey": get_vt_key()}
@@ -93,6 +107,9 @@ def get_vt_report(scan_id):
 
 
 def get_ip_report(ip):
+    if get_vt_key() is None:
+        return None
+
     url = "https://www.virustotal.com/vtapi/v2/ip-address/report"
     parameters = {"ip": ip,
                   "apikey": get_vt_key()}
