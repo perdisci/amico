@@ -1622,18 +1622,34 @@ char *get_user_agent(char* ua, const char *payload, int payload_size) {
         ua[i]='\0';
     }
 
+    // replace UA string with generalized UA
+    if(strstr(ua,"Edge"))
+        strcat(ua," Edge ");
     if(strstr(ua,"Chrome"))
-        strcpy(ua,"Chrome"); // replace UA string with generalized UA
-    else if(strstr(ua,"Firefox"))
-        strcpy(ua,"Firefox");
-    else if(strstr(ua,"MSIE"))
-        strcpy(ua,"MSIE");
-    else if(strstr(ua,"Safari"))
-        strcpy(ua,"Safari");
-    else if(strstr(ua,"Opera"))
-        strcpy(ua,"Opera");
-    else
-        strcpy(ua,"Other UA");
+        strcat(ua," Chrome ");
+    if(strstr(ua,"Firefox"))
+        strcat(ua," Firefox ");
+    if(strstr(ua,"MSIE"))
+        strcat(ua," MSIE ");
+    if(strstr(ua,"Safari"))
+        strcat(ua," Safari ");
+    if(strstr(ua,"Opera"))
+        strcat(ua," Opera ");
+    if(strstr(ua,"Linux"))
+        strcat(ua," Linux ");
+    if(strstr(ua,"Android"))
+        strcat(ua," Android ");
+    if(strstr(ua,"Windows"))
+        strcat(ua," Windows ");
+    if(strstr(ua,"Windows"))
+        strcat(ua," Windows ");
+    if(strstr(ua,"iPhone"))
+        strcat(ua," iPhone ");
+    if(strstr(ua,"Mac OS X"))
+        strcat(ua," Mac OS X ");
+    if(strstr(ua,"Mobile"))
+        strcat(ua," Mobile ");
+
 
     return ua;
 }
