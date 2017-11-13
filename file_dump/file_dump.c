@@ -1622,6 +1622,7 @@ char *get_user_agent(char* ua, const char *payload, int payload_size) {
         ua[i]='\0';
     }
 
+    // TODO(Roberto): read strings from a config file
     // replace UA string with generalized UA
     if(strstr(ua,"Edge"))
         strcat(ua," Edge ");
@@ -1641,15 +1642,12 @@ char *get_user_agent(char* ua, const char *payload, int payload_size) {
         strcat(ua," Android ");
     if(strstr(ua,"Windows"))
         strcat(ua," Windows ");
-    if(strstr(ua,"Windows"))
-        strcat(ua," Windows ");
     if(strstr(ua,"iPhone"))
         strcat(ua," iPhone ");
     if(strstr(ua,"Mac OS X"))
         strcat(ua," Mac OS X ");
     if(strstr(ua,"Mobile"))
         strcat(ua," Mobile ");
-
 
     return ua;
 }
