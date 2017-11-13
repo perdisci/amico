@@ -1597,6 +1597,7 @@ char *get_ref_host(char* refhost, const char *payload, int payload_size) {
 
 char *get_user_agent(char* ua, const char *payload, int payload_size) {
 
+    char tmp_ua[MAX_UA_LEN+1];
     char haystack[payload_size+1];
     const char needle[] = "\r\nUser-Agent:";
     char *p = NULL;
@@ -1611,42 +1612,43 @@ char *get_user_agent(char* ua, const char *payload, int payload_size) {
     p = boyermoore_search(haystack,needle);
     
     if(p == NULL) 
-        ua[0] = '\0';
+        tmp_ua[0] = '\0';
     else {
         p += 2; // skip \r\n
         for(i=0; i<MAX_UA_LEN && (p+i) < &(haystack[payload_size]); i++) {
             if(*(p+i) == '\r' || *(p+i) == '\n')
                 break;
-            ua[i]=*(p+i);
+            tmp_ua[i]=*(p+i);
         }
-        ua[i]='\0';
+        tmp_ua[i]='\0';
     }
 
     // TODO(Roberto): read strings from a config file
     // replace UA string with generalized UA
-    if(strstr(ua,"Edge"))
+    ua[0]='\0';
+    if(strstr(tmp_ua,"Edge"))
         strcat(ua," Edge ");
-    if(strstr(ua,"Chrome"))
+    if(strstr(tmp_ua,"Chrome"))
         strcat(ua," Chrome ");
-    if(strstr(ua,"Firefox"))
+    if(strstr(tmp_ua,"Firefox"))
         strcat(ua," Firefox ");
-    if(strstr(ua,"MSIE"))
+    if(strstr(tmp_ua,"MSIE"))
         strcat(ua," MSIE ");
-    if(strstr(ua,"Safari"))
+    if(strstr(tmp_ua,"Safari"))
         strcat(ua," Safari ");
-    if(strstr(ua,"Opera"))
+    if(strstr(tmp_ua,"Opera"))
         strcat(ua," Opera ");
-    if(strstr(ua,"Linux"))
+    if(strstr(tmp_ua,"Linux"))
         strcat(ua," Linux ");
-    if(strstr(ua,"Android"))
+    if(strstr(tmp_ua,"Android"))
         strcat(ua," Android ");
-    if(strstr(ua,"Windows"))
+    if(strstr(tmp_ua,"Windows"))
         strcat(ua," Windows ");
-    if(strstr(ua,"iPhone"))
+    if(strstr(tmp_ua,"iPhone"))
         strcat(ua," iPhone ");
-    if(strstr(ua,"Mac OS X"))
+    if(strstr(tmp_ua,"Mac OS X"))
         strcat(ua," Mac OS X ");
-    if(strstr(ua,"Mobile"))
+    if(strstr(tmp_ua,"Mobile"))
         strcat(ua," Mobile ");
 
     return ua;
