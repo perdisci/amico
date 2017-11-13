@@ -174,6 +174,9 @@ void ght_delete(ghash_table_t *ht, char *key) {
 /* Searches Hash Table */
 ght_entry_t* ght_search(const ghash_table_t *ht, const char *key) {
 
+    if(ht==NULL)
+        return NULL;
+
     ght_entry_t *v;
 
     uint32_t h = _ghash_fn(key) % ht->length;

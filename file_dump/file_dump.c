@@ -2917,6 +2917,11 @@ ghash_table_t* init_httpreq_triggers_ht(char* triggers_fname) {
 
     // open and read triggers_fname line by line
     FILE* f = fopen(triggers_fname, "rt");
+    if(f==NULL) {
+        perror("Error while opening triggers_fname file:");
+        exit(0);
+    }
+
     char line[MAX_HOST_LEN+1];
 
     printf("Reading trigger host names from: %s\n", triggers_fname);
